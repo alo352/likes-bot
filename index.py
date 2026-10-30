@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "8939978538:AAHlgI_vZ8d71QGqrpXU1S2z9DPBv5npZYg"
+BOT_TOKEN = "9160352065:AAHleKcS8Nh0CnxUCKJdPxq_V-OXn59XgCE"
 ALLOWED_GROUPS = []
 LIKES_API_KEY = "mypasskey2026"
 
