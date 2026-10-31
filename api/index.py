@@ -3,7 +3,7 @@ import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
+app = FastAPI()
 BOT_TOKEN = "9160352065:AAHleKcS8Nh0CnxUCKJdPxq_V-OXn59XgCE"
 ALLOWED_GROUPS = [-5494553901]
 LIKES_API_KEY = "mypasskey2026"
@@ -91,7 +91,7 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"/remain error: {e}")
         await update.message.reply_text("❌ Failed to fetch data.")
 
-app = FastAPI()
+
 
 @app.on_event("startup")
 async def startup_event():
