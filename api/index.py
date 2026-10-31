@@ -34,6 +34,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     region, uid = context.args
+    if region.upper() in ["RU", "ME"]:
+    region = "SG"
+
 
     progress = await update.message.reply_text("📤 Sending likes...")
 
