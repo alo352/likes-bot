@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "9160352065:AAHleKcS8Nh0CnxUCKJdPxq_V-OXn59XgCE"
-ALLOWED_GROUPS = []
+ALLOWED_GROUPS = [-5494553901]
 LIKES_API_KEY = "mypasskey2026"
 
 logging.basicConfig(
