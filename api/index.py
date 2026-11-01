@@ -77,6 +77,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"**💬 UID:** `{details['UID']}`\n"
             f"**📊 Likes Before:** `{details['LikesbeforeCommand']}`\n"
             f"**👍 Likes Given:** `{details['LikesGivenByAPI']}`\n"
+            f"**🧩 Likes Credited:** `{details['LikesCreditedToAccount']}`\n"
             f"**📈 Likes After:** `{details['LikesafterCommand']}`"
         )
 
