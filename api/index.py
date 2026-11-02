@@ -16,7 +16,7 @@ logging.basicConfig(
 ptb_application = None
 
 def is_allowed(chat) -> bool:
-    return chat.type in ["private", "group", "supergroup"]
+    return chat.type in ["group", "supergroup"]
 
 
 
