@@ -39,7 +39,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) != 1:
         await update.message.reply_text(
             "⚠️ **Истифодабарӣ:** `/like {uid}`\n"
-            "📌 **Намуна:** `/like 14610622738`",
+            "📌 **Намуна:** `/like 15853201485`",
             parse_mode="Markdown"
         )
         return
