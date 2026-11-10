@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "9160352065:AAHleKcS8Nh0CnxUCKJdPxq_V-OXn59XgCE"
+BOT_TOKEN = "9160352065:AAHRleNu3Kuz6kJDZJxcaOAUlG7Xv_20q6Y"
 ALLOWED_GROUPS = [-5494553901]
 
 # Калиди нав ва суроғаи нави API-и шумо
