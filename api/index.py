@@ -35,11 +35,23 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    # Танҳо UID талаб карда мешавад
-    if not context.args or len(context.args) != 1:
+    # Мувофиқи ҳуҷҷатҳо: миқдор (100 ё 200) ва UID лозим аст
+    if not context.args or len(context.args) != 2:
         await update.message.reply_text(
-            "⚠️ **Истифодабарӣ:** `/like {uid}`\n"
-            "📌 **Намуна:** `/like 15853201485`",
+            "⚠️ **Истифодабарӣ:** `/like {100 ё 200} {uid}`\n"
+            "📌 **Намуна:** `/like 200 14610622738`",
+            parse_mode="Markdown"
+        )
+        return
+
+    likes_count = context.args[0]
+    uid = context.args[1]
+
+    # Санҷиши миқдори дуруст (танҳо 100 ё 200, мувофиқи ҳуҷҷатҳои API)
+    if likes_count not in ["100", "200"]:
+        await update.message.reply_text(
+            "⚠️ **Хатогӣ:** Шумо метавонед танҳо миқдори **100** ё **200**-ро интихоб кунед!\n"
+            "📌 **Намуна:** `/like 200 14610622738`",
             parse_mode="Markdown"
         )
         return
@@ -60,12 +72,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    uid = context.args[0]
-
     progress = await update.message.reply_text("📤 Фиристодани лайкҳо...")
 
-    # Дархост ба API фақат бо калид ва UID
-    api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
+    # Сохтани URL мувофиқи ҳуҷҷатҳои API (масалан: /like200 ё /like100)
+    api_url = f"{BASE_API_URL}/like{likes_count}?api_key={LIKES_API_KEY}&uid={uid}"
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -95,7 +105,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
             f"**💬 UID:** `{details.get('UID', uid)}`\n"
             f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
-            f"**👍 Лайкҳои иловашуда:** `{details.get('LikesGivenByAPI', 'N/A')}`\n"
+            f"**👍 Лайкҳои иловашуда:** `{details.get('LikesGivenByAPI', likes_count)}`\n"
             f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`"
         )
 
@@ -151,4 +161,5 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def health_check():
     return {"status": "Bot is running"}
+
 
