@@ -1,4 +1,5 @@
-import logging
+import os
+import time
 import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update
@@ -10,6 +11,10 @@ ALLOWED_GROUPS = [-5494553901]
 # Калиди нав ва суроғаи нави API-и шумо
 LIKES_API_KEY = "Parnetka_43455514"
 BASE_API_URL = "https://fflikes.ucbot.net"
+
+# Луғат барои нигоҳ доштани вақти охирини лайки корбарон (Cooldown)
+user_cooldowns = {}
+COOLDOWN_TIME = 86400  # 24 соат ба сония (24 * 60 * 60)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -24,6 +29,7 @@ def is_allowed(chat) -> bool:
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+    user = update.effective_user
 
     if not is_allowed(chat):
         return
@@ -35,6 +41,22 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return
+
+    user_id = user.id
+    current_time = time.time()
+
+    # Санҷиши лимити 24 соат
+    if user_id in user_cooldowns:
+        elapsed_time = current_time - user_cooldowns[user_id]
+        if elapsed_time < COOLDOWN_TIME:
+            remaining_hours = int((COOLDOWN_TIME - elapsed_time) / 3600)
+            remaining_mins = int(((COOLDOWN_TIME - elapsed_time) % 3600) / 60)
+            await update.message.reply_text(
+                f"⏳ **Шумо аллакай лайк гирифтаед!**\n"
+                f"Лутфан пас аз **{remaining_hours} соат ва {remaining_mins} дақиқа** бори дигар кӯшиш кунед.",
+                parse_mode="Markdown"
+            )
+            return
 
     uid = context.args[0]
 
@@ -61,6 +83,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await progress.edit_text(error_message, parse_mode="Markdown")
             return
+
+        # Дархост бомуваффақият гузашт, вақти ҳозираро барои лимити 24 соат сабт мекунем
+        user_cooldowns[user_id] = time.time()
 
         details = data.get("data", {})
 
@@ -126,3 +151,4 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def health_check():
     return {"status": "Bot is running"}
+
