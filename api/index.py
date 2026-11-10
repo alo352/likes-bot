@@ -25,7 +25,7 @@ logging.basicConfig(
 ptb_application = None
 
 def is_allowed(chat) -> bool:
-    return chat.type in ["group", "supergroup"]
+    return chat.type in ["private", "group", "supergroup"]
 
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
