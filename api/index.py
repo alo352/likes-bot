@@ -6,7 +6,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "9160352065:AAHleKcS8Nh0CnxUCKJdPxq_V-OXn59XgCE"
 ALLOWED_GROUPS = [-5494553901]
-LIKES_API_KEY = "mypasskey2026"
+
+# Калиди нав ва суроғаи нави API-и шумо
+LIKES_API_KEY = "Parnetka_43455514"
+BASE_API_URL = "https://fflikes.ucbot.net"
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -16,8 +19,7 @@ logging.basicConfig(
 ptb_application = None
 
 def is_allowed(chat) -> bool:
-    return chat.type in ["group", "supergroup"]
-
+    return chat.type in ["private", "group", "supergroup"]
 
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -26,30 +28,20 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    if not context.args or len(context.args) != 2:
+    # Мувофиқи ҳуҷҷатҳо, API-и нав фақат UID-ро талаб мекунад
+    if not context.args or len(context.args) != 1:
         await update.message.reply_text(
-            "Usage: `/like {region} {uid}`",
+            "⚠️ Истифодабарӣ: `/like {uid}`",
             parse_mode="Markdown"
         )
         return
 
-    region, uid = context.args
-    region = region.lower()
+    uid = context.args[0]
 
-    if region == "ind":
-        region = "ind"
-    elif region in ["br", "latam", "us", "na"]:
-        region = "br"
-    else:
-        region = "sg"
+    progress = await update.message.reply_text("📤 Фиристодани лайкҳо...")
 
-
-    progress = await update.message.reply_text("📤 Sending likes...")
-
-    api_url = (
-        f"https://ff.ggbluewhale.store/api/likes"
-        f"?region={region}&uid={uid}&key={LIKES_API_KEY}"
-    )
+    # Истифодаи endpoint-и /like бо калид ва UID-и корбар
+    api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -61,31 +53,31 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             data = None
 
-        if not isinstance(data, dict) or data.get("status") != 1 or "response" not in data:
+        # Санҷиши муваффақият мувофиқи ҳуҷҷатҳо (success: true)
+        if not isinstance(data, dict) or data.get("success") is not True:
             error_message = (
-                "❌ **API returned an error**\n\n"
-                f"**Raw server response:**\n`{raw_response[:3500]}`"
+                "❌ **Хатогӣ дар API**\n\n"
+                f"**Ҷавоби сервер:**\n`{raw_response[:3500]}`"
             )
             await progress.edit_text(error_message, parse_mode="Markdown")
             return
 
-        details = data["response"]
+        details = data.get("data", {})
 
         message = (
-            f"✅ **Likes Added Successfully!**\n\n"
-            f"**👤 Player:** `{details['PlayerNickname']}`\n"
-            f"**💬 UID:** `{details['UID']}`\n"
-            f"**📊 Likes Before:** `{details['LikesbeforeCommand']}`\n"
-            f"**👍 Likes Given:** `{details['LikesGivenByAPI']}`\n"
-            f"**🧩 Likes Credited:** `{details['LikesCreditedToAccount']}`\n"
-            f"**📈 Likes After:** `{details['LikesafterCommand']}`"
+            f"✅ **Лайкҳо бомуваффақият фиристода шуданд!**\n\n"
+            f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
+            f"**💬 UID:** `{details.get('UID', uid)}`\n"
+            f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
+            f"**👍 Лайкҳои иловашуда:** `{details.get('LikesGivenByAPI', 'N/A')}`\n"
+            f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`"
         )
 
         await progress.edit_text(message, parse_mode="Markdown")
 
     except Exception as e:
         logging.error(f"/like error: {e}")
-        await progress.edit_text("❌ API error. Please try again later.")
+        await progress.edit_text("❌ Хатогии сервер. Лутфан баъдтар кӯшиш кунед.")
 
 
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,18 +86,19 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    url = f"https://api-key-mgmt-default-rtdb.firebaseio.com/likes_api_keys/{LIKES_API_KEY}.json"
+    # Дархост ба панел барои санҷиши ҳолат ё маълумот
+    api_url = f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}"
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
+            async with session.get(api_url) as resp:
                 raw = await resp.text()
 
-        await update.message.reply_text(raw)
+        await update.message.reply_text(f"📊 **Ҳолати баланс/панел:**\n`{raw}`", parse_mode="Markdown")
 
     except Exception as e:
         logging.error(f"/remain error: {e}")
-        await update.message.reply_text("❌ Failed to fetch data.")
+        await update.message.reply_text("❌ Хатогӣ ҳангоми гирифтани маълумот.")
 
 app = FastAPI()
 
