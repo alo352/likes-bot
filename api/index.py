@@ -35,16 +35,27 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    # Танҳо UID лозим аст (фармон: /like [uid])
-    if not context.args or len(context.args) != 1:
+    # Мувофиқи ҳуҷҷатҳо: миқдор (100 ё 200) ва UID лозим аст
+    if not context.args or len(context.args) != 2:
         await update.message.reply_text(
-            "⚠️ **Истифодабарӣ:** `/like {uid}`\n"
-            "📌 **Намуна:** `/like 14610622738`",
+            "⚠️ **Истифодабарӣ:** `/like {100 ё 200} {uid}`\n"
+            "📌 **Намуна:** `/like 200 14610622738`",
             parse_mode="Markdown"
         )
         return
 
-    uid = context.args[0]
+    likes_count = context.args[0]
+    uid = context.args[1]
+
+    # Санҷиши миқдори дуруст (танҳо 100 ё 200, мувофиқи ҳуҷҷатҳои API)
+    if likes_count not in ["100", "200"]:
+        await update.message.reply_text(
+            "⚠️ **Хатогӣ:** Шумо метавонед танҳо миқдори **100** ё **200**-ро интихоб кунед!\n"
+            "📌 **Намуна:** `/like 200 14610622738`",
+            parse_mode="Markdown"
+        )
+        return
+
     user_id = user.id
     current_time = time.time()
 
@@ -63,8 +74,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     progress = await update.message.reply_text("📤 Фиристодани лайкҳо...")
 
-    # Суроғаи дурусти API (бе 100 ё 200, мувофиқи дархости нав)
-    api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
+    # Сохтани URL мувофиқи ҳуҷҷатҳои API (масалан: /like200 ё /like100)
+    api_url = f"{BASE_API_URL}/like{likes_count}?api_key={LIKES_API_KEY}&uid={uid}"
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -84,38 +95,17 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(error_message, parse_mode="Markdown")
             return
 
-        details = data.get("data", {})
-        
-        # Санҷиши миқдори лайки иловашуда
-        likes_given = details.get('LikesGivenByAPI', 0)
-        try:
-            likes_given_int = int(likes_given)
-        except (ValueError, TypeError):
-            likes_given_int = 0
-
-        # Агар лайкҳои иловашуда 0 бошад (Лайк нарафтааст)
-        if likes_given_int <= 0:
-            message = (
-                f"❌ **Лайк нарафт! (Хатогӣ)**\n\n"
-                f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
-                f"**💬 UID:** `{details.get('UID', uid)}`\n"
-                f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
-                f"**👍 Лайкҳои иловашуда:** `0`\n"
-                f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`\n\n"
-                f"⚠️ *Эзоҳ: Мумкин ном символҳои махсус (монанди &) дорад ё аккаунт лимит дорад!*"
-            )
-            await progress.edit_text(message, parse_mode="Markdown")
-            return
-
         # Дархост бомуваффақият гузашт, вақтро барои лимити 24 соат сабт мекунем
         user_cooldowns[user_id] = time.time()
+
+        details = data.get("data", {})
 
         message = (
             f"✅ **Лайкҳо бомуваффақият фиристода шуданд!**\n\n"
             f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
             f"**💬 UID:** `{details.get('UID', uid)}`\n"
             f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
-            f"**👍 Лайкҳои иловашуда:** `{likes_given}`\n"
+            f"**👍 Лайкҳои иловашуда:** `{details.get('LikesGivenByAPI', likes_count)}`\n"
             f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`"
         )
 
