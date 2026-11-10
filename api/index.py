@@ -1,4 +1,4 @@
-import os
+Hi import os
 import time
 import aiohttp
 from fastapi import FastAPI, Request
@@ -25,7 +25,7 @@ logging.basicConfig(
 ptb_application = None
 
 def is_allowed(chat) -> bool:
-    return chat.type in ["private", "group", "supergroup"]
+    return chat.type in ["group", "supergroup"]
 
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
