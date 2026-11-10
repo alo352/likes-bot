@@ -8,14 +8,15 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 BOT_TOKEN = "9160352065:AAHRleNu3Kuz6kJDZJxcaOAUlG7Xv_20q6Y"
 ALLOWED_GROUPS = [-5494553901]
 
-# Калиди нав ва суроғаи нави API-и шумо
+# Калиди API ва суроға
 LIKES_API_KEY = "Parnetka_43455514"
 BASE_API_URL = "https://fflikes.ucbot.net"
 
-# Луғат барои нигоҳ доштани вақти охирини лайки корбарон (Cooldown)
+# Луғат барои нигоҳ доштани лимити 24-соатаи корбарон
 user_cooldowns = {}
-COOLDOWN_TIME = 86400  # 24 соат ба сония (24 * 60 * 60)
+COOLDOWN_TIME = 86400  # 24 соат ба сония
 
+import logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -34,10 +35,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    # Мувофиқи ҳуҷҷатҳо, API-и нав фақат UID-ро талаб мекунад
+    # Танҳо UID талаб карда мешавад
     if not context.args or len(context.args) != 1:
         await update.message.reply_text(
-            "⚠️ Истифодабарӣ: `/like {uid}`",
+            "⚠️ **Истифодабарӣ:** `/like {uid}`\n"
+            "📌 **Намуна:** `/like 14610622738`",
             parse_mode="Markdown"
         )
         return
@@ -62,7 +64,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     progress = await update.message.reply_text("📤 Фиристодани лайкҳо...")
 
-    # Истифодаи endpoint-и /like бо калид ва UID-и корбар
+    # Дархост ба API фақат бо калид ва UID
     api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
 
     try:
@@ -75,7 +77,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             data = None
 
-        # Санҷиши муваффақият мувофиқи ҳуҷҷатҳо (success: true)
         if not isinstance(data, dict) or data.get("success") is not True:
             error_message = (
                 "❌ **Хатогӣ дар API**\n\n"
@@ -84,7 +85,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(error_message, parse_mode="Markdown")
             return
 
-        # Дархост бомуваффақият гузашт, вақти ҳозираро барои лимити 24 соат сабт мекунем
+        # Дархост бомуваффақият гузашт, вақтро барои лимити 24 соат сабт мекунем
         user_cooldowns[user_id] = time.time()
 
         details = data.get("data", {})
@@ -111,7 +112,6 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(chat):
         return
 
-    # Дархост ба панел барои санҷиши ҳолат ё маълумот
     api_url = f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}"
 
     try:
