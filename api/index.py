@@ -1,150 +1,129 @@
 import os
 import time
-import json
-import logging
-import aiohttp
+import requests
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8"
-# Танҳо ID-и гурӯҳи иҷозатдодашуда тафтиш карда мешавад
+app = FastAPI()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
+API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
+API_URL = "https://fflikes.ucbot.net"
+FIREBASE_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/telegram_bot_cooldowns"
+
+# Танҳо ID-и гурӯҳи шумо:
 ALLOWED_GROUPS = [-1004354930364]
+COOLDOWN_SECONDS = 86400  # 24 соат
 
-# Калиди API ва суроға
-LIKES_API_KEY = "Parnetka_43455514"
-BASE_API_URL = "https://fflikes.ucbot.net"
+def get_user_cooldown(user_id: int) -> float:
+    """Олидани вақти лайки охирин аз Firebase"""
+    try:
+        res = requests.get(f"{FIREBASE_URL}/{user_id}.json", timeout=5)
+        if res.status_code == 200 and res.json():
+            return float(res.json())
+    except Exception:
+        pass
+    return 0.0
 
-# Луғат барои нигоҳ доштани лимити 24-соатаи корбарон
-user_cooldowns = {}
-COOLDOWN_TIME = 86400  # 24 соат ба сония
+def set_user_cooldown(user_id: int, timestamp: float):
+    """Сабти вақти лайк дар Firebase"""
+    try:
+        requests.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp, timeout=5)
+    except Exception:
+        pass
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+def format_remaining_time(seconds: float) -> str:
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    if hours > 0:
+        return f"<b>{hours}</b> соат ва <b>{minutes}</b> дақиқа"
+    return f"<b>{minutes}</b> дақиқа"
 
-ptb_application = None
-
-# ИСЛОҲИ ХАТОГИИ 2: Санҷидани он ки паём маҳз дар гурӯҳи иҷозатдодашуда аст
-def is_allowed(chat) -> bool:
-    return chat.type in ["group", "supergroup"] and chat.id in ALLOWED_GROUPS
-
-async def check_dm(update: Update) -> bool:
-    chat = update.effective_chat
-    if chat.type == "private":
-        await update.message.reply_text(
-            "❌ <b>ДАСТРАСӢ МАҲДУД АСТ!</b>\n\n"
-            "🛡️ Ин бот танҳо дар гурӯҳҳои расмӣ кор мекунад.\n"
-            "🔑 Барои гирифтани Ключ ба <b>@parnetka</b> муроҷиат кунед!",
-            parse_mode="HTML"
-        )
-        return True
-    return False
-
-# 1. /like (100 лайк бо тарҳи зебо)
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if await check_dm(update): return
-    if not is_allowed(update.effective_chat): return
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
 
-    if not context.args or len(context.args) != 1:
-        await update.message.reply_text(
+    # 1. Муҳофизати гурӯҳ
+    if chat_id not in ALLOWED_GROUPS:
+        return
+
+    # 2. Муҳофизати формати UID
+    if not context.args:
+        await update.message.reply_html(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
-            "👉 <code>/like 14610622738</code>",
-            parse_mode="HTML"
+            "👉 <code>/like 14610622738</code>"
         )
         return
 
     uid = context.args[0].strip()
-
-    # ИСЛОҲИ ХАТОГИИ 1: Танҳо рақам будан ва дарозии 8-12 рақамро тафтиш мекунад (пешгирии масрафи беҳудаи баланс)
     if not uid.isdigit() or not (8 <= len(uid) <= 12):
-        await update.message.reply_text(
+        await update.message.reply_html(
             "❌ <b>ID-И ХАТО!</b>\n\n"
-            "Free Fire UID бояд танҳо аз рақамҳо (аз 8 то 12 рақам) иборат бошад.",
-            parse_mode="HTML"
+            "Free Fire UID бояд танҳо аз рақамҳо (аз 8 то 12 рақам) иборат бошад."
         )
         return
 
-    user_id = update.effective_user.id
-    current_time = time.time()
+    # 3. Санҷиши лимити 24-соата аз Firebase
+    last_time = get_user_cooldown(user_id)
+    now = time.time()
+    elapsed = now - last_time
 
-    # Санҷиши лимит (Cooldown)
-    if user_id in user_cooldowns:
-        elapsed = current_time - user_cooldowns[user_id]
-        if elapsed < COOLDOWN_TIME:
-            rem_h = int((COOLDOWN_TIME - elapsed) / 3600)
-            rem_m = int(((COOLDOWN_TIME - elapsed) % 3600) / 60)
-            await update.message.reply_text(
-                f"⏳ <b>ЛИМИТИ 24-СОАТӢ!</b>\n\n"
-                f"Шумо аллакай лайк гирифтаед.\n"
-                f"⏰ Бори дигар пас аз: <b>{rem_h} соат ва {rem_m} дақиқа</b>",
-                parse_mode="HTML"
-            )
-            return
+    if elapsed < COOLDOWN_SECONDS:
+        rem = COOLDOWN_SECONDS - elapsed
+        time_str = format_remaining_time(rem)
+        await update.message.reply_html(
+            f"⏳ <b>ЛИМИТИ 24-СОАТӢ!</b>\n\n"
+            f"Шумо аллакай лайк гирифтаед.\n"
+            f"⏰ Бори дигар пас аз: {time_str}"
+        )
+        return
 
-    progress = await update.message.reply_text("🔄 <b>Дар ҳоли пайвастшавӣ ба сервери Free Fire...</b>", parse_mode="HTML")
-    api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
+    progress = await update.message.reply_html("⏳ <i>Дархост коркард шуда истодааст, лутфан интизор шавед...</i>")
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=15) as resp:
-                raw = await resp.text()
-        
-        data = json.loads(raw)
-        
-        if not isinstance(data, dict) or data.get("success") is not True:
-            await progress.edit_text(f"❌ <b>Хатогӣ дар сервер!</b>\n\n<code>{raw[:3500]}</code>", parse_mode="HTML")
+        payload = {"key": API_KEY, "uid": uid}
+        res = requests.post(API_URL, json=payload, timeout=15)
+        data = res.json()
+
+        if res.status_code != 200 or not data.get("status"):
+            msg = data.get("message") or data.get("error") or "Хатогии номаълум"
+            await progress.edit_text(f"❌ <b>Хатогӣ дар API:</b> {msg}", parse_mode="HTML")
             return
 
-        details = data.get("data", {})
-        likes_given = int(details.get('LikesGivenByAPI', 0))
+        details = data.get("details", {})
+        likes_given = details.get("LikesGivenByAPI", 0)
 
         if likes_given <= 0:
             await progress.edit_text(
                 "❌ <b>Лайк илова нашуд!</b>\n\n"
                 f"👤 <b>Бозигар:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
                 f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n\n"
-                "⚠️ <i>Эзоҳ: Аккаунт лимит дорад ё ном хато аст.</i>",
+                "⚠️ <i>Аккаунт дар худи бозӣ лимити 24-соата дорад.</i>",
                 parse_mode="HTML"
             )
             return
 
-        # ИСЛОҲИ ХАТОГИИ 3: Сабти вақти лимит танҳо ПАС АЗ ОН содир мешавад, ки лайк дақиқан рафт
-        user_cooldowns[user_id] = time.time()
+        # ТАНҲО БАЪДИ ЛАЙКИ МУВАФФАҚ ВАҚТ ДАР FIREBASE САБТ МЕШАВАД:
+        set_user_cooldown(user_id, now)
 
-        msg = (
-            f"🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
+        response_text = (
+            "🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n"
+            "___________________________________\n\n"
             f"👤 <b>Ном:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
             f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n"
-            f"📊 <b>Қабл аз лайк:</b> <code>{details.get('LikesbeforeCommand', 'N/A')}</code>\n"
-            f"🔥 <b>Илова шуд:</b> <code>+{likes_given}</code>\n"
-            f"📈 <b>Ҳоло:</b> <code>{details.get('LikesafterCommand', 'N/A')}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"✨ <i>Бозӣ бо @parnetka лаззатбахш аст!</i>"
+            f"📊 <b>Қабл аз лайк:</b> {details.get('LikesbeforeCommand', 'N/A')}\n"
+            f"🔥 <b>Илова шуд:</b> +{likes_given}\n"
+            f"📈 <b>Ҳоло:</b> {details.get('LikesafterCommand', 'N/A')}\n"
+            "___________________________________\n\n"
+            "✨ <i>Бозӣ бо @parnetka лаззатбахш аст!</i>"
         )
-        await progress.edit_text(msg, parse_mode="HTML")
+        await progress.edit_text(response_text, parse_mode="HTML")
+
     except Exception as e:
-        logging.error(f"Error in /like: {e}")
-        await progress.edit_text("❌ <b>Хатогии ногаҳонии сервер!</b>", parse_mode="HTML")
+        await progress.edit_text(f"❌ <b>Хато дар сервер:</b> {str(e)}", parse_mode="HTML")
 
-# 2. /remain (Баланс)
-async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if await check_dm(update): return
-    if not is_allowed(update.effective_chat): return
-
-    api_url = f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}"
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=10) as resp:
-                raw = await resp.text()
-        await update.message.reply_text(f"📊 <b>Омори панел / Баланс:</b>\n\n<code>{raw}</code>", parse_mode="HTML")
-    except Exception:
-        await update.message.reply_text("❌ Хатогӣ ҳангоми гирифтани маълумот.")
-
-app = FastAPI()
+ptb_application = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -154,25 +133,24 @@ async def startup_event():
 
     ptb_application = ApplicationBuilder().token(BOT_TOKEN).build()
     ptb_application.add_handler(CommandHandler("like", like_command))
-    ptb_application.add_handler(CommandHandler("remain", remain_command))
-    ptb_application.add_handler(CommandHandler("status", remain_command))
-    ptb_application.add_handler(CommandHandler("me", remain_command))
 
     await ptb_application.initialize()
     await ptb_application.start()
+    
+    # Автоматикӣ бедор нигоҳ доштани Webhook:
+    WEBHOOK_URL = "https://likes-bot-weld.vercel.app/api/webhook"
+    try:
+        await ptb_application.bot.set_webhook(url=WEBHOOK_URL)
+    except Exception:
+        pass
 
 @app.post("/api/webhook")
 async def telegram_webhook(request: Request):
-    req = await request.json()
-    update = Update.de_json(req, ptb_application.bot)
-    await ptb_application.process_update(update)
+    if ptb_application:
+        data = await request.json()
+        update = Update.de_json(data, ptb_application.bot)
+        await ptb_application.process_update(update)
     return {"status": "ok"}
-
-@app.get("/")
-async def health_check():
-    return {"status": "Bot is running"}
-
-
 
 
 
