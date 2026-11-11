@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8"
 # Танҳо ID-и гурӯҳи иҷозатдодашуда тафтиш карда мешавад
-ALLOWED_GROUPS = [-5494553901]
+ALLOWED_GROUPS = [-1004354930364]
 
 # Калиди API ва суроға
 LIKES_API_KEY = "Parnetka_43455514"
