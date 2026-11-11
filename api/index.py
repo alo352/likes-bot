@@ -1,6 +1,6 @@
 import os
 import time
-import requests
+import httpx
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -12,24 +12,25 @@ API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
 API_URL = "https://fflikes.ucbot.net"
 FIREBASE_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/telegram_bot_cooldowns"
 
-# Танҳо ID-и гурӯҳи шумо:
 ALLOWED_GROUPS = [-1004354930364]
 COOLDOWN_SECONDS = 86400  # 24 соат
 
-def get_user_cooldown(user_id: int) -> float:
+async def get_user_cooldown(user_id: int) -> float:
     """Олидани вақти лайки охирин аз Firebase"""
     try:
-        res = requests.get(f"{FIREBASE_URL}/{user_id}.json", timeout=5)
-        if res.status_code == 200 and res.json():
-            return float(res.json())
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{FIREBASE_URL}/{user_id}.json")
+            if res.status_code == 200 and res.json():
+                return float(res.json())
     except Exception:
         pass
     return 0.0
 
-def set_user_cooldown(user_id: int, timestamp: float):
+async def set_user_cooldown(user_id: int, timestamp: float):
     """Сабти вақти лайк дар Firebase"""
     try:
-        requests.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp, timeout=5)
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp)
     except Exception:
         pass
 
@@ -44,11 +45,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # 1. Муҳофизати гурӯҳ
     if chat_id not in ALLOWED_GROUPS:
         return
 
-    # 2. Муҳофизати формати UID
     if not context.args:
         await update.message.reply_html(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
@@ -64,8 +63,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 3. Санҷиши лимити 24-соата аз Firebase
-    last_time = get_user_cooldown(user_id)
+    last_time = await get_user_cooldown(user_id)
     now = time.time()
     elapsed = now - last_time
 
@@ -83,8 +81,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         payload = {"key": API_KEY, "uid": uid}
-        res = requests.post(API_URL, json=payload, timeout=15)
-        data = res.json()
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(API_URL, json=payload)
+            data = res.json()
 
         if res.status_code != 200 or not data.get("status"):
             msg = data.get("message") or data.get("error") or "Хатогии номаълум"
@@ -104,8 +103,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # ТАНҲО БАЪДИ ЛАЙКИ МУВАФФАҚ ВАҚТ ДАР FIREBASE САБТ МЕШАВАД:
-        set_user_cooldown(user_id, now)
+        await set_user_cooldown(user_id, now)
 
         response_text = (
             "🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n"
@@ -136,13 +134,6 @@ async def startup_event():
 
     await ptb_application.initialize()
     await ptb_application.start()
-    
-    # Автоматикӣ бедор нигоҳ доштани Webhook:
-    WEBHOOK_URL = "https://likes-bot-weld.vercel.app/api/webhook"
-    try:
-        await ptb_application.bot.set_webhook(url=WEBHOOK_URL)
-    except Exception:
-        pass
 
 @app.post("/api/webhook")
 async def telegram_webhook(request: Request):
