@@ -25,12 +25,22 @@ logging.basicConfig(
 ptb_application = None
 
 def is_allowed(chat) -> bool:
-    return chat.type in ["private", "group", "supergroup"]
+    # Танҳо ба гурӯҳҳо ва супергурӯҳҳо иҷозат медиҳем
+    return chat.type in ["group", "supergroup"]
 
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
+
+    # Агар дар ДМ (private) бошад, паёми махсус мефиристем ва корро қатъ мекунем
+    if chat.type == "private":
+        await update.message.reply_text(
+            "❌ **Шумо ба ин бот дастрасӣ надоред!**\n"
+            "Барои Ключ бояд ба @parnetka муроҷиат кунед.",
+            parse_mode="Markdown"
+        )
+        return
 
     if not is_allowed(chat):
         return
@@ -128,6 +138,15 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+
+    # Агар дар ДМ (private) бошад, паёми махсус мефиристем
+    if chat.type == "private":
+        await update.message.reply_text(
+            "❌ **Шумо ба ин бот дастрасӣ надоред!**\n"
+            "Барои Ключ бояд ба @parnetka муроҷиат кунед.",
+            parse_mode="Markdown"
+        )
+        return
 
     if not is_allowed(chat):
         return
