@@ -45,9 +45,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
+    # 1. Танҳо дар гурӯҳи иҷозатдодашуда кор мекунад
     if chat_id not in ALLOWED_GROUPS:
         return
 
+    # 2. Санҷиши воридкунии UID
     if not context.args:
         await update.message.reply_html(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
@@ -63,6 +65,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # 3. Санҷиши лимити 24-соата аз Firebase
     last_time = await get_user_cooldown(user_id)
     now = time.time()
     elapsed = now - last_time
@@ -83,7 +86,13 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = {"key": API_KEY, "uid": uid}
         async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(API_URL, json=payload)
-            data = res.json()
+            
+            # Санҷиши дурустии ҷавоби API (пешгирӣ аз хатои JSON)
+            try:
+                data = res.json()
+            except Exception:
+                await progress.edit_text("❌ <b>Сервери API муваққатан фаъол нест!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
+                return
 
         if res.status_code != 200 or not data.get("status"):
             msg = data.get("message") or data.get("error") or "Хатогии номаълум"
@@ -103,6 +112,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # Танҳо пас аз лайки муваффақ вақт дар Firebase сабт мешавад
         await set_user_cooldown(user_id, now)
 
         response_text = (
@@ -142,6 +152,5 @@ async def telegram_webhook(request: Request):
         update = Update.de_json(data, ptb_application.bot)
         await ptb_application.process_update(update)
     return {"status": "ok"}
-
 
 
