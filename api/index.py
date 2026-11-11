@@ -81,18 +81,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = {"key": API_KEY, "uid": uid}
         async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(API_URL, json=payload)
-            
             try:
                 data = res.json()
             except Exception:
-                # Ҷавоби аслии API-ро нишон медиҳем, то сабабаш аниқ шавад:
-                short_body = res.text[:150] if res.text else "Ҷавоби холӣ"
-                await progress.edit_text(
-                    f"❌ <b>Хатогӣ дар сайти API!</b>\n"
-                    f"Коди статус: <code>{res.status_code}</code>\n"
-                    f"Ҷавоби сайт: <code>{short_body}</code>",
-                    parse_mode="HTML"
-                )
+                await progress.edit_text("❌ <b>Сервери API-и лайк муваққатан хомӯш аст!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
                 return
 
         if res.status_code != 200 or not data.get("status"):
@@ -128,8 +120,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await progress.edit_text(response_text, parse_mode="HTML")
 
-    except Exception as e:
-        await progress.edit_text(f"❌ <b>Хато дар сервер:</b> {str(e)}", parse_mode="HTML")
+    except Exception:
+        await progress.edit_text("❌ <b>Сервери API муваққатан хомӯш аст!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
 
 ptb_application = None
 
@@ -152,5 +144,4 @@ async def telegram_webhook(request: Request):
         update = Update.de_json(data, ptb_application.bot)
         await ptb_application.process_update(update)
     return {"status": "ok"}
-
 
