@@ -16,7 +16,6 @@ ALLOWED_GROUPS = [-1004354930364]
 COOLDOWN_SECONDS = 86400  # 24 соат
 
 async def get_user_cooldown(user_id: int) -> float:
-    """Олидани вақти лайки охирин аз Firebase"""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             res = await client.get(f"{FIREBASE_URL}/{user_id}.json")
@@ -27,7 +26,6 @@ async def get_user_cooldown(user_id: int) -> float:
     return 0.0
 
 async def set_user_cooldown(user_id: int, timestamp: float):
-    """Сабти вақти лайк дар Firebase"""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp)
@@ -45,11 +43,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # 1. Танҳо дар гурӯҳи иҷозатдодашуда кор мекунад
     if chat_id not in ALLOWED_GROUPS:
         return
 
-    # 2. Санҷиши воридкунии UID
     if not context.args:
         await update.message.reply_html(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
@@ -65,7 +61,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 3. Санҷиши лимити 24-соата аз Firebase
     last_time = await get_user_cooldown(user_id)
     now = time.time()
     elapsed = now - last_time
@@ -87,11 +82,17 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(API_URL, json=payload)
             
-            # Санҷиши дурустии ҷавоби API (пешгирӣ аз хатои JSON)
             try:
                 data = res.json()
             except Exception:
-                await progress.edit_text("❌ <b>Сервери API муваққатан фаъол нест!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
+                # Ҷавоби аслии API-ро нишон медиҳем, то сабабаш аниқ шавад:
+                short_body = res.text[:150] if res.text else "Ҷавоби холӣ"
+                await progress.edit_text(
+                    f"❌ <b>Хатогӣ дар сайти API!</b>\n"
+                    f"Коди статус: <code>{res.status_code}</code>\n"
+                    f"Ҷавоби сайт: <code>{short_body}</code>",
+                    parse_mode="HTML"
+                )
                 return
 
         if res.status_code != 200 or not data.get("status"):
@@ -112,7 +113,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Танҳо пас аз лайки муваффақ вақт дар Firebase сабт мешавад
         await set_user_cooldown(user_id, now)
 
         response_text = (
