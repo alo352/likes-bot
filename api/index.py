@@ -1,11 +1,14 @@
 import os
 import time
+import json
+import logging
 import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8"
+# Танҳо ID-и гурӯҳи иҷозатдодашуда тафтиш карда мешавад
 ALLOWED_GROUPS = [-5494553901]
 
 # Калиди API ва суроға
@@ -16,7 +19,6 @@ BASE_API_URL = "https://fflikes.ucbot.net"
 user_cooldowns = {}
 COOLDOWN_TIME = 86400  # 24 соат ба сония
 
-import logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -24,15 +26,16 @@ logging.basicConfig(
 
 ptb_application = None
 
+# ИСЛОҲИ ХАТОГИИ 2: Санҷидани он ки паём маҳз дар гурӯҳи иҷозатдодашуда аст
 def is_allowed(chat) -> bool:
-    return chat.type in ["group", "supergroup"]
+    return chat.type in ["group", "supergroup"] and chat.id in ALLOWED_GROUPS
 
 async def check_dm(update: Update) -> bool:
     chat = update.effective_chat
     if chat.type == "private":
         await update.message.reply_text(
             "❌ <b>ДАСТРАСӢ МАҲДУД АСТ!</b>\n\n"
-            "🛡️ Ин бот танҳо дар гурӯҳҳо кор мекунад.\n"
+            "🛡️ Ин бот танҳо дар гурӯҳҳои расмӣ кор мекунад.\n"
             "🔑 Барои гирифтани Ключ ба <b>@parnetka</b> муроҷиат кунед!",
             parse_mode="HTML"
         )
@@ -52,17 +55,28 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    uid = context.args[0]
+    uid = context.args[0].strip()
+
+    # ИСЛОҲИ ХАТОГИИ 1: Танҳо рақам будан ва дарозии 8-12 рақамро тафтиш мекунад (пешгирии масрафи беҳудаи баланс)
+    if not uid.isdigit() or not (8 <= len(uid) <= 12):
+        await update.message.reply_text(
+            "❌ <b>ID-И ХАТО!</b>\n\n"
+            "Free Fire UID бояд танҳо аз рақамҳо (аз 8 то 12 рақам) иборат бошад.",
+            parse_mode="HTML"
+        )
+        return
+
     user_id = update.effective_user.id
     current_time = time.time()
 
+    # Санҷиши лимит (Cooldown)
     if user_id in user_cooldowns:
         elapsed = current_time - user_cooldowns[user_id]
         if elapsed < COOLDOWN_TIME:
             rem_h = int((COOLDOWN_TIME - elapsed) / 3600)
             rem_m = int(((COOLDOWN_TIME - elapsed) % 3600) / 60)
             await update.message.reply_text(
-                f"⏳ <b>ЛИНЧИ СОАТӢ!</b>\n\n"
+                f"⏳ <b>ЛИМИТИ 24-СОАТӢ!</b>\n\n"
                 f"Шумо аллакай лайк гирифтаед.\n"
                 f"⏰ Бори дигар пас аз: <b>{rem_h} соат ва {rem_m} дақиқа</b>",
                 parse_mode="HTML"
@@ -74,9 +88,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as resp:
+            async with session.get(api_url, timeout=15) as resp:
                 raw = await resp.text()
-        data = __import__("json").loads(raw)
+        
+        data = json.loads(raw)
         
         if not isinstance(data, dict) or data.get("success") is not True:
             await progress.edit_text(f"❌ <b>Хатогӣ дар сервер!</b>\n\n<code>{raw[:3500]}</code>", parse_mode="HTML")
@@ -95,7 +110,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # ИСЛОҲИ ХАТОГИИ 3: Сабти вақти лимит танҳо ПАС АЗ ОН содир мешавад, ки лайк дақиқан рафт
         user_cooldowns[user_id] = time.time()
+
         msg = (
             f"🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
@@ -108,7 +125,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✨ <i>Бозӣ бо @parnetka лаззатбахш аст!</i>"
         )
         await progress.edit_text(msg, parse_mode="HTML")
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error in /like: {e}")
         await progress.edit_text("❌ <b>Хатогии ногаҳонии сервер!</b>", parse_mode="HTML")
 
 # 2. /remain (Баланс)
@@ -120,7 +138,7 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as resp:
+            async with session.get(api_url, timeout=10) as resp:
                 raw = await resp.text()
         await update.message.reply_text(f"📊 <b>Омори панел / Баланс:</b>\n\n<code>{raw}</code>", parse_mode="HTML")
     except Exception:
@@ -153,6 +171,7 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def health_check():
     return {"status": "Bot is running"}
+
 
 
 
