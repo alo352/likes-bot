@@ -97,7 +97,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_cooldowns[user_id] = time.time()
         msg = (
-            f"🎉 <b>ЛÀЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n\n"
+            f"🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"👤 <b>Ном:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
             f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n"
@@ -111,47 +111,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await progress.edit_text("❌ <b>Хатогии ногаҳонии сервер!</b>", parse_mode="HTML")
 
-# 2. /like200 (200 лайк бо тарҳи зебо)
-async def like200_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if await check_dm(update): return
-    if not is_allowed(update.effective_chat): return
-
-    if not context.args or len(context.args) != 1:
-        await update.message.reply_text(
-            "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
-            "👉 <code>/like200 14610622738</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    uid = context.args[0]
-    progress = await update.message.reply_text("🔄 <b>Фиристодани 200 лайк...</b>", parse_mode="HTML")
-    api_url = f"{BASE_API_URL}/like200?api_key={LIKES_API_KEY}&uid={uid}"
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as resp:
-                raw = await resp.text()
-        data = __import__("json").loads(raw)
-        
-        if not isinstance(data, dict) or data.get("success") is not True:
-            await progress.edit_text(f"❌ <b>Хатогӣ:</b>\n<code>{raw[:3500]}</code>", parse_mode="HTML")
-            return
-
-        details = data.get("data", {})
-        msg = (
-            f"💎 <b>200 ЛАЙК БОМУВАФФАҚИЯТ ФИРИСТОДА ШУД!</b> 🔥\n\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>Ном:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
-            f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n"
-            f"👍 <b>Илова шуд:</b> <code>+{details.get('LikesGivenByAPI', 0)}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━"
-        )
-        await progress.edit_text(msg, parse_mode="HTML")
-    except Exception:
-        await progress.edit_text("❌ <b>Хатогии сервер.</b>", parse_mode="HTML")
-
-# 3. /remain (Баланс)
+# 2. /remain (Баланс)
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_dm(update): return
     if not is_allowed(update.effective_chat): return
@@ -176,7 +136,6 @@ async def startup_event():
 
     ptb_application = ApplicationBuilder().token(BOT_TOKEN).build()
     ptb_application.add_handler(CommandHandler("like", like_command))
-    ptb_application.add_handler(CommandHandler("like200", like200_command))
     ptb_application.add_handler(CommandHandler("remain", remain_command))
     ptb_application.add_handler(CommandHandler("status", remain_command))
     ptb_application.add_handler(CommandHandler("me", remain_command))
