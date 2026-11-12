@@ -1,6 +1,6 @@
 import os
 import time
-import httpx
+import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -17,18 +17,20 @@ COOLDOWN_SECONDS = 86400  # 24 соат
 
 async def get_user_cooldown(user_id: int) -> float:
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            res = await client.get(f"{FIREBASE_URL}/{user_id}.json")
-            if res.status_code == 200 and res.json():
-                return float(res.json())
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{FIREBASE_URL}/{user_id}.json", timeout=5) as res:
+                if res.status == 200:
+                    data = await res.json()
+                    if data:
+                        return float(data)
     except Exception:
         pass
     return 0.0
 
 async def set_user_cooldown(user_id: int, timestamp: float):
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp)
+        async with aiohttp.ClientSession() as session:
+            await session.put(f"{FIREBASE_URL}/{user_id}.json", json=timestamp, timeout=5)
     except Exception:
         pass
 
@@ -79,15 +81,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         payload = {"key": API_KEY, "uid": uid}
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.post(API_URL, json=payload)
-            try:
-                data = res.json()
-            except Exception:
-                await progress.edit_text("❌ <b>Сервери API-и лайк муваққатан хомӯш аст!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
-                return
+        async with aiohttp.ClientSession() as session:
+            async with session.post(API_URL, json=payload, timeout=15) as res:
+                data = await res.json(content_type=None)
 
-        if res.status_code != 200 or not data.get("status"):
+        if res.status != 200 or not data.get("status"):
             msg = data.get("message") or data.get("error") or "Хатогии номаълум"
             await progress.edit_text(f"❌ <b>Хатогӣ дар API:</b> {msg}", parse_mode="HTML")
             return
@@ -120,8 +118,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await progress.edit_text(response_text, parse_mode="HTML")
 
-    except Exception:
-        await progress.edit_text("❌ <b>Сервери API муваққатан хомӯш аст!</b> Лутфан баъдтар санҷед.", parse_mode="HTML")
+    except Exception as e:
+        await progress.edit_text(f"❌ <b>Хато дар сервер:</b> {str(e)}", parse_mode="HTML")
 
 ptb_application = None
 
@@ -144,4 +142,3 @@ async def telegram_webhook(request: Request):
         update = Update.de_json(data, ptb_application.bot)
         await ptb_application.process_update(update)
     return {"status": "ok"}
-
