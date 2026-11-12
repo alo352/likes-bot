@@ -1,19 +1,31 @@
 import os
 import time
+import json
+import logging
 import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-app = FastAPI()
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
-API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
-API_URL = "https://fflikes.ucbot.net"
+LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
+BASE_API_URL = "https://fflikes.ucbot.net"
 FIREBASE_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/telegram_bot_cooldowns"
 
-ALLOWED_GROUPS = [-1004354930364]
-COOLDOWN_SECONDS = 86400  # 24 соат
+ALLOWED_GROUPS = [-1004354930364, -5494553901]
+COOLDOWN_TIME = 86400  # 24 соат ба сония
+
+ptb_application = None
+
+def is_allowed(chat) -> bool:
+    if chat.type == "private":
+        return True
+    return chat.id in ALLOWED_GROUPS
 
 async def get_user_cooldown(user_id: int) -> float:
     try:
@@ -34,103 +46,132 @@ async def set_user_cooldown(user_id: int, timestamp: float):
     except Exception:
         pass
 
-def format_remaining_time(seconds: float) -> str:
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    if hours > 0:
-        return f"<b>{hours}</b> соат ва <b>{minutes}</b> дақиқа"
-    return f"<b>{minutes}</b> дақиқа"
-
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
+    chat = update.effective_chat
+    user = update.effective_user
 
-    if chat_id not in ALLOWED_GROUPS:
+    if not is_allowed(chat):
         return
 
-    if not context.args:
-        await update.message.reply_html(
-            "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ:</b>\n\n"
-            "👉 <code>/like 14610622738</code>"
+    if not context.args or len(context.args) != 1:
+        await update.message.reply_text(
+            "⚠️ **Истифодабарӣ:** `/like {uid}`\n"
+            "📌 **Намуна:** `/like 14610622738`",
+            parse_mode="Markdown"
         )
         return
 
     uid = context.args[0].strip()
-    if not uid.isdigit() or not (8 <= len(uid) <= 12):
-        await update.message.reply_html(
-            "❌ <b>ID-И ХАТО!</b>\n\n"
-            "Free Fire UID бояд танҳо аз рақамҳо (аз 8 то 12 рақам) иборат бошад."
-        )
-        return
+    user_id = user.id
+    current_time = time.time()
 
+    # Санҷиши лимити 24 соат аз Firebase
     last_time = await get_user_cooldown(user_id)
-    now = time.time()
-    elapsed = now - last_time
-
-    if elapsed < COOLDOWN_SECONDS:
-        rem = COOLDOWN_SECONDS - elapsed
-        time_str = format_remaining_time(rem)
-        await update.message.reply_html(
-            f"⏳ <b>ЛИМИТИ 24-СОАТӢ!</b>\n\n"
-            f"Шумо аллакай лайк гирифтаед.\n"
-            f"⏰ Бори дигар пас аз: {time_str}"
-        )
-        return
-
-    progress = await update.message.reply_html("⏳ <i>Дархост коркард шуда истодааст, лутфан интизор шавед...</i>")
-
-    try:
-        payload = {"key": API_KEY, "uid": uid}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(API_URL, json=payload, timeout=15) as res:
-                data = await res.json(content_type=None)
-
-        if res.status != 200 or not data.get("status"):
-            msg = data.get("message") or data.get("error") or "Хатогии номаълум"
-            await progress.edit_text(f"❌ <b>Хатогӣ дар API:</b> {msg}", parse_mode="HTML")
-            return
-
-        details = data.get("details", {})
-        likes_given = details.get("LikesGivenByAPI", 0)
-
-        if likes_given <= 0:
-            await progress.edit_text(
-                "❌ <b>Лайк илова нашуд!</b>\n\n"
-                f"👤 <b>Бозигар:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
-                f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n\n"
-                "⚠️ <i>Аккаунт дар худи бозӣ лимити 24-соата дорад.</i>",
-                parse_mode="HTML"
+    if last_time > 0:
+        elapsed_time = current_time - last_time
+        if elapsed_time < COOLDOWN_TIME:
+            remaining_hours = int((COOLDOWN_TIME - elapsed_time) / 3600)
+            remaining_mins = int(((COOLDOWN_TIME - elapsed_time) % 3600) / 60)
+            await update.message.reply_text(
+                f"⏳ **Шумо аллакай лайк гирифтаед!**\n"
+                f"Лутфан пас аз **{remaining_hours} соат ва {remaining_mins} дақиқа** бори дигар кӯшиш кунед.",
+                parse_mode="Markdown"
             )
             return
 
-        await set_user_cooldown(user_id, now)
+    progress = await update.message.reply_text("📤 Фиристодани лайкҳо...")
 
-        response_text = (
-            "🎉 <b>ЛАЙКҲО БОМУВАФФАҚИЯТ РАФТАНД!</b> 🚀\n"
-            "___________________________________\n\n"
-            f"👤 <b>Ном:</b> <code>{details.get('PlayerNickname', 'N/A')}</code>\n"
-            f"🆔 <b>UID:</b> <code>{details.get('UID', uid)}</code>\n"
-            f"📊 <b>Қабл аз лайк:</b> {details.get('LikesbeforeCommand', 'N/A')}\n"
-            f"🔥 <b>Илова шуд:</b> +{likes_given}\n"
-            f"📈 <b>Ҳоло:</b> {details.get('LikesafterCommand', 'N/A')}\n"
-            "___________________________________\n\n"
-            "✨ <i>Бозӣ бо @parnetka лаззатбахш аст!</i>"
+    # Суроғаи аслии API бо GET
+    api_url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=15) as resp:
+                raw_response = await resp.text()
+
+        try:
+            data = json.loads(raw_response)
+        except ValueError:
+            data = None
+
+        if not isinstance(data, dict) or data.get("success") is not True:
+            error_message = (
+                "❌ **Хатогӣ дар API**\n\n"
+                f"**Ҷавоби сервер:**\n`{raw_response[:3500]}`"
+            )
+            await progress.edit_text(error_message, parse_mode="Markdown")
+            return
+
+        details = data.get("data", {})
+        likes_given = details.get("LikesGivenByAPI", 0)
+        try:
+            likes_given_int = int(likes_given)
+        except (ValueError, TypeError):
+            likes_given_int = 0
+
+        if likes_given_int <= 0:
+            message = (
+                f"❌ **Лайк нарафт! (Хатогӣ)**\n\n"
+                f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
+                f"**💬 UID:** `{details.get('UID', uid)}`\n"
+                f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
+                f"**👍 Лайкҳои иловашуда:** `0`\n"
+                f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`\n\n"
+                f"⚠️ *Эзоҳ: Мумкин ном символҳои махсус (монанди &) дорад ё аккаунт лимит дорад!*"
+            )
+            await progress.edit_text(message, parse_mode="Markdown")
+            return
+
+        # Сабти вақт дар Firebase пас аз муваффақият
+        await set_user_cooldown(user_id, time.time())
+
+        message = (
+            f"✅ **Лайкҳо бомуваффақият фиристода шуданд!**\n\n"
+            f"**👤 Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
+            f"**💬 UID:** `{details.get('UID', uid)}`\n"
+            f"**📊 Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
+            f"**👍 Лайкҳои иловашуда:** `{likes_given}`\n"
+            f"**📈 Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`"
         )
-        await progress.edit_text(response_text, parse_mode="HTML")
+
+        await progress.edit_text(message, parse_mode="Markdown")
 
     except Exception as e:
-        await progress.edit_text(f"❌ <b>Хато дар сервер:</b> {str(e)}", parse_mode="HTML")
+        logging.error(f"/like error: {e}")
+        await progress.edit_text("❌ Хатогии сервер. Лутфан баъдтар кӯшиш кунед.")
 
-ptb_application = None
+
+async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+
+    if not is_allowed(chat):
+        return
+
+    api_url = f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=10) as resp:
+                raw = await resp.text()
+
+        await update.message.reply_text(f"📊 **Ҳолати баланс/панел:**\n`{raw}`", parse_mode="Markdown")
+
+    except Exception as e:
+        logging.error(f"/remain error: {e}")
+        await update.message.reply_text("❌ Хатогӣ ҳангоми гирифтани маълумот.")
+
+app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
     global ptb_application
+
     if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN missing!")
+        raise ValueError("BOT_TOKEN env variable is missing!")
 
     ptb_application = ApplicationBuilder().token(BOT_TOKEN).build()
     ptb_application.add_handler(CommandHandler("like", like_command))
+    ptb_application.add_handler(CommandHandler("remain", remain_command))
 
     await ptb_application.initialize()
     await ptb_application.start()
@@ -138,7 +179,8 @@ async def startup_event():
 @app.post("/api/webhook")
 async def telegram_webhook(request: Request):
     if ptb_application:
-        data = await request.json()
-        update = Update.de_json(data, ptb_application.bot)
+        req = await request.json()
+        update = Update.de_json(req, ptb_application.bot)
         await ptb_application.process_update(update)
     return {"status": "ok"}
+
