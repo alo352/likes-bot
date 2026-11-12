@@ -17,7 +17,7 @@ LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
 BASE_API_URL = "https://fflikes.ucbot.net"
 FIREBASE_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/telegram_bot_cooldowns"
 
-ALLOWED_GROUPS = [-1004354930364, -5494553901]
+ALLOWED_GROUPS = [-1004354930364]
 COOLDOWN_TIME = 86400  # 24 соат ба сония
 
 ptb_application = None
