@@ -26,12 +26,12 @@ ptb_application = None
 
 ACCESS_DENIED_TEXT = (
     "🚫 **ДАСТРАСӢ МАҲДУД АСТ!**\n"
-    "━━━━━━━━━━━━━━\n"
+    "━━━━━━━━━━━\n"
     "🔒 *Ин бот танҳо дар гурӯҳҳои расмии мо ва барои мизоҷони VIP фаъол аст.*\n\n"
     "✨ **Мехоҳед ба ботамон дастрасӣ ё Ключи шахсӣ гиред?**\n"
     "📩 Ҳозир ба админ муроҷиат кунед:\n"
     "👉 **@parnetka**\n"
-    "━━━━━━━━━━━━━━\n"
+    "━━━━━━━━━━━\n"
     "⚡ *Хизматрасонии зуд ва боэътимод!*"
 )
 
@@ -79,13 +79,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_group_access(update):
         return
 
-    user = update.effective_user
-    load_cache()
-
-    if not context.args or len(context.args) != 1 or not context.args[0].isdigit():
+    # 1. Агар умуман чизе нанавишта бошад (/like)
+    if not context.args:
         await update.message.reply_text(
             "⚠️ **ТАРЗИ ИСТИФОДАБАРӢ**\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━\n"
             "👉 Фармон: `/like {UID}`\n"
             "📌 Намуна: `/like 13961132846`",
             parse_mode="Markdown"
@@ -93,16 +91,30 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     uid = context.args[0].strip()
+
+    # 2. Аввал санҷиши дурустии UID (бояд танҳо рақам ва аз 8 то 12 рақам бошад)
+    if len(context.args) != 1 or not uid.isdigit() or not (8 <= len(uid) <= 12):
+        await update.message.reply_text(
+            "❌ **ID-И ХАТО!**\n\n"
+            "Free Fire UID бояд танҳо аз рақамҳо (аз 8 то 12 рақам) иборат бошад.",
+            parse_mode="Markdown"
+        )
+        return
+
+    user = update.effective_user
     user_id = str(user.id)
     now = time.time()
 
+    load_cache()
+
+    # 3. Санҷиши лимити 24-соатаи корбар
     if user_id in memory_users:
         elapsed = now - memory_users[user_id]
         if elapsed < COOLDOWN_TIME:
             rem = format_remaining(COOLDOWN_TIME - elapsed)
             await update.message.reply_text(
                 "⏳ **ЛИМИТИ 24-СОАТА**\n"
-                "━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━\n"
                 f"👤 **Корбар:** {user.first_name}\n"
                 "🚫 Шумо имрӯз аллакай лайк гирифтаед!\n\n"
                 f"🕒 **Боқимонда:** `{rem}`\n"
@@ -111,13 +123,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # 4. Санҷиши лимити 24-соатаи худи UID
     if uid in memory_uids:
         elapsed_uid = now - memory_uids[uid]
         if elapsed_uid < COOLDOWN_TIME:
             rem = format_remaining(COOLDOWN_TIME - elapsed_uid)
             await update.message.reply_text(
                 "⚠️ **АККАУНТ ДАР ЛИМИТ**\n"
-                "━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━\n"
                 f"🆔 **UID:** `{uid}`\n"
                 "🚫 Ба ин аккаунт имрӯз аллакай лайк фиристода шудааст!\n\n"
                 f"🕒 **Боқимонда:** `{rem}`",
@@ -125,6 +138,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # Фавран лимитро қулф мекунем
     memory_users[user_id] = now
     memory_uids[uid] = now
     save_cache()
@@ -148,7 +162,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "maximum" in err_msg.lower() or "already" in err_msg.lower():
                 await progress.edit_text(
                     "⏳ **ЛИМИТИ РӮЗОНА ПУР**\n"
-                    "━━━━━━━━━━━━━━\n"
+                    "━━━━━━━━━━━\n"
                     f"🆔 **UID:** `{uid}`\n"
                     "⚠️ Ин аккаунт имрӯз аллакай лимити максималии лайкро гирифтааст!\n\n"
                     "🕒 **Лутфан пас аз 24 соат кӯшиш кунед.**",
@@ -181,7 +195,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await progress.edit_text(
                 "❌ **ЛАЙК НАРАФТ**\n"
-                "━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━\n"
                 f"👤 **Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
                 f"🆔 **UID:** `{details.get('UID', uid)}`\n"
                 f"📊 **Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
@@ -193,14 +207,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         message = (
             "✅ **ЛАЙКҲО ФИРИСТОДА ШУДАНД!**\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━\n"
             f"👤 **Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
             f"🆔 **UID:** `{details.get('UID', uid)}`\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━\n"
             f"📉 **Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
             f"🔥 **Лайкҳои иловашуда:** `+{likes_given}`\n"
             f"📈 **Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━\n"
             "⏳ *Дархости навбатӣ пас аз 24 соат!*"
         )
 
@@ -225,7 +239,7 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 raw = await resp.text()
         await update.message.reply_text(
             "📊 **ҲОЛАТИ БАЛАНС / API**\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━\n"
             f"`{raw}`",
             parse_mode="Markdown"
         )
