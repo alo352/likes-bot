@@ -16,7 +16,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_F
 LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
 BASE_API_URL = "https://fflikes.ucbot.net"
 
-ALLOWED_GROUPS = [-1004354930364, -5494553901]
+ALLOWED_GROUPS = [-1004354930364]
 COOLDOWN_TIME = 86400  # 24 соат ба сония
 CACHE_FILE = "/tmp/ff_cooldowns.json"
 
