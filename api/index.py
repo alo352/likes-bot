@@ -4,6 +4,7 @@ import json
 import asyncio
 import logging
 import aiohttp
+from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -560,6 +561,81 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Санҷиши вақти боқимондаи лимит: /check <UID ё User_ID>"""
+    if not is_admin_user(update.effective_user):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ **ТАРЗИ ИСТИФОДАБАРӢ:**\n"
+            "📌 Намуна: `/check 18778177236`",
+            parse_mode="Markdown"
+        )
+        return
+
+    target = context.args[0].strip()
+    if not target.isdigit():
+        await update.message.reply_text("❌ Танҳо рақами UID ё Telegram ID-ро ворид кунед.")
+        return
+
+    await load_state()
+    now = time.time()
+    tj_tz = timezone(timedelta(hours=5))  # Вақти Тоҷикистон (UTC+5)
+
+    # 1. Аввал месанҷем, ки оё VIP ҳаст
+    if is_vip_uid(target):
+        exp_ts = float(vip_uids[target])
+        rem_vip = format_remaining(exp_ts - now)
+        exp_str = datetime.fromtimestamp(exp_ts, tz=tj_tz).strftime("%d.%m.%Y %H:%M")
+        await update.message.reply_text(
+            "💎 **ҲОЛАТИ АККАУНТ: VIP**\n"
+            "━━━━━━━━━━━\n"
+            f"🆔 **ID:** `{target}`\n"
+            "✅ Ин аккаунт бе лимити 24-соата кор мекунад!\n"
+            f"⏳ **Мӯҳлати VIP:** `{rem_vip}` (то `{exp_str}`)",
+            parse_mode="Markdown"
+        )
+        return
+
+    # 2. Месанҷем, ки оё дар лимити 24-соата ҳаст (ҳамчун UID ё User ID)
+    found_ts = None
+    linked_user = None
+
+    if target in memory_uids:
+        entry = memory_uids[target]
+        if isinstance(entry, dict):
+            found_ts = float(entry.get("time", 0))
+            linked_user = entry.get("user_id")
+        else:
+            found_ts = float(entry)
+    elif target in memory_users:
+        found_ts = float(memory_users[target])
+
+    if found_ts and (now - found_ts) < COOLDOWN_TIME:
+        unlock_ts = found_ts + COOLDOWN_TIME
+        rem_str = format_remaining(unlock_ts - now)
+        unlock_time_str = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%d.%m.%Y соати %H:%M")
+        user_info = f"\n👤 **Telegram ID:** `{linked_user}`" if linked_user else ""
+
+        await update.message.reply_text(
+            "⏳ **ҲОЛАТИ ЛИМИТ: ФАЪОЛ**\n"
+            "━━━━━━━━━━━\n"
+            f"🆔 **ID:** `{target}`{user_info}\n"
+            f"🕒 **Боқимонда:** `{rem_str}`\n"
+            f"🔓 **Вақти кушодашавӣ:** `{unlock_time_str}`",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            "✅ **ЛИМИТ НЕСТ (ОЗОД АСТ)!**\n"
+            "━━━━━━━━━━━\n"
+            f"🆔 **ID:** `{target}`\n"
+            "🚀 Ин аккаунт метавонад ҳамин ҳозир `/like` занад.",
+            parse_mode="Markdown"
+        )
+
+
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
@@ -658,6 +734,7 @@ async def ensure_bot_ready():
         ptb_application.add_handler(CommandHandler("like", like_command))
         ptb_application.add_handler(CommandHandler("remain", remain_command))
         ptb_application.add_handler(CommandHandler("reset", reset_command))
+        ptb_application.add_handler(CommandHandler("check", check_command))
         ptb_application.add_handler(CommandHandler("addvip", addvip_command))
         ptb_application.add_handler(CommandHandler("delvip", delvip_command))
         ptb_application.add_handler(CommandHandler("viplist", viplist_command))
