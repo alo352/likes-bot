@@ -5,7 +5,7 @@ import asyncio
 import logging
 import aiohttp
 from fastapi import FastAPI, Request
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
@@ -27,6 +27,17 @@ CACHE_FILE = "/tmp/ff_cooldowns.json"
 memory_users = {}
 memory_uids = {}
 ptb_application = None
+
+# Тугмаи зери паём (ба монанди расми шумо)
+DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
+])
+
+VIP_PROMO_FOOTER = (
+    "\n\n💎 **МЕХОҲЕД 400+ VIP LIKE ХАРЕД?**\n"
+    "⚡️ *Бе интизории 24 соат ва бо суръати баланд!*\n"
+    "📩 **Ба админ муроҷиат кунед:** 👉 **@parnetka**"
+)
 
 ACCESS_DENIED_TEXT = (
     "🚫 **ДАСТРАСӢ МАҲДУД АСТ!**\n"
@@ -72,6 +83,43 @@ def clean_name(name: str) -> str:
 def is_admin_user(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
+def find_level_recursive(obj) -> str:
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level") and v is not None:
+                val_str = str(v).strip()
+                if val_str.isdigit():
+                    return val_str
+        for v in obj.values():
+            res = find_level_recursive(v)
+            if res:
+                return res
+    elif isinstance(obj, list):
+        for item in obj:
+            res = find_level_recursive(item)
+            if res:
+                return res
+    return ""
+
+async def fetch_player_level(uid: str) -> str:
+    info_urls = [
+        f"{BASE_API_URL}/info?api_key={LIKES_API_KEY}&uid={uid}",
+        f"https://ff.ggbluewhale.store/api/info?uid={uid}",
+    ]
+    async with aiohttp.ClientSession() as session:
+        for url in info_urls:
+            try:
+                async with session.get(url, timeout=4) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        parsed = json.loads(text)
+                        lvl = find_level_recursive(parsed)
+                        if lvl:
+                            return lvl
+            except Exception:
+                continue
+    return "N/A"
+
 async def check_group_access(update: Update) -> bool:
     chat = update.effective_chat
     user = update.effective_user
@@ -81,7 +129,11 @@ async def check_group_access(update: Update) -> bool:
         return True
     if chat.type == "private":
         if update.message:
-            await update.message.reply_text(ACCESS_DENIED_TEXT, parse_mode="Markdown")
+            await update.message.reply_text(
+                ACCESS_DENIED_TEXT,
+                parse_mode="Markdown",
+                reply_markup=DEVELOPER_KEYBOARD
+            )
         return False
     return chat.id in ALLOWED_GROUPS
 
@@ -91,23 +143,26 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
     if is_admin_user(user):
         return
     if chat and chat.type == "private" and update.message:
-        await update.message.reply_text(ACCESS_DENIED_TEXT, parse_mode="Markdown")
+        await update.message.reply_text(
+            ACCESS_DENIED_TEXT,
+            parse_mode="Markdown",
+            reply_markup=DEVELOPER_KEYBOARD
+        )
 
 async def fetch_likes_api(api_url: str) -> str:
     async with aiohttp.ClientSession() as session:
         async with session.get(api_url, timeout=15) as resp:
             return await resp.text()
 
-async def run_kinematic_animation(progress_msg, uid: str, api_task: asyncio.Task):
+async def run_kinematic_animation(progress_msg, uid: str):
     frames = [
-        ("⚡ **Пайвастшавӣ ба сервери FF...**", "█░░░░░░░░░", "12%"),
-        ("🔍 **Ҷустуҷӯи аккаунти бозингар...**", "███░░░░░░░", "36%"),
-        ("🚀 **Омодасозии бастаи лайкҳо...**", "██████░░░░", "64%"),
-        ("🔥 **Фиристодани лайкҳо ба UID...**", "█████████░", "89%"),
+        ("⚡ **Пайвастшавӣ ба сервери FF...**", "██░░░░░░░░", "18%"),
+        ("🔍 **Ҷустуҷӯи аккаунти бозингар...**", "████░░░░░░", "44%"),
+        ("🚀 **Омодасозии бастаи лайкҳо...**", "███████░░░", "71%"),
+        ("🔥 **Фиристодани лайкҳо ба UID...**", "█████████░", "93%"),
     ]
     for title, bar, pct in frames:
-        if api_task.done():
-            break
+        await asyncio.sleep(0.85)
         try:
             await progress_msg.edit_text(
                 f"{title}\n"
@@ -117,7 +172,6 @@ async def run_kinematic_animation(progress_msg, uid: str, api_task: asyncio.Task
             )
         except Exception:
             pass
-        await asyncio.sleep(0.45)
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_group_access(update):
@@ -128,8 +182,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ **ТАРЗИ ИСТИФОДАБАРӢ**\n"
             "━━━━━━━━━━━\n"
             "👉 Фармон: `/like {UID}`\n"
-            "📌 Намуна: `/like 13961132846`",
-            parse_mode="Markdown"
+            "📌 Намуна: `/like 13961132846`"
+            f"{VIP_PROMO_FOOTER}",
+            parse_mode="Markdown",
+            reply_markup=DEVELOPER_KEYBOARD
         )
         return
 
@@ -161,8 +217,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"👤 **Корбар:** `{clean_name(user.first_name)}`\n"
                     "🚫 Шумо имрӯз аллакай лайк гирифтаед!\n\n"
                     f"🕒 **Боқимонда:** `{rem}`\n"
-                    "💡 *Пас аз гузаштани вақт дубора кӯшиш кунед.*",
-                    parse_mode="Markdown"
+                    "💡 *Пас аз гузаштани вақт дубора кӯшиш кунед.*"
+                    f"{VIP_PROMO_FOOTER}",
+                    parse_mode="Markdown",
+                    reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
@@ -175,8 +233,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "━━━━━━━━━━━\n"
                     f"🆔 **UID:** `{uid}`\n"
                     "🚫 Ба ин аккаунт имрӯз аллакай лайк фиристода шудааст!\n\n"
-                    f"🕒 **Боқимонда:** `{rem}`",
-                    parse_mode="Markdown"
+                    f"🕒 **Боқимонда:** `{rem}`"
+                    f"{VIP_PROMO_FOOTER}",
+                    parse_mode="Markdown",
+                    reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
@@ -194,7 +254,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         api_task = asyncio.create_task(fetch_likes_api(api_url))
-        await run_kinematic_animation(progress, uid, api_task)
+        await run_kinematic_animation(progress, uid)
         raw_response = await api_task
 
         try:
@@ -211,8 +271,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "━━━━━━━━━━━\n"
                     f"🆔 **UID:** `{uid}`\n"
                     "⚠️ Ин аккаунт имрӯз аллакай лимити максималии лайкро гирифтааст!\n\n"
-                    "🕒 **Лутфан пас аз 24 соат кӯшиш кунед.**",
-                    parse_mode="Markdown"
+                    "🕒 **Лутфан пас аз 24 соат кӯшиш кунед.**"
+                    f"{VIP_PROMO_FOOTER}",
+                    parse_mode="Markdown",
+                    reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
@@ -224,11 +286,16 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(
                 "❌ **Хатогӣ ҳангоми иҷро!**\n"
                 f"📝 *Сабаб:* `{err_msg}`",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=DEVELOPER_KEYBOARD
             )
             return
 
         details = data.get("data", {})
+        player_level = find_level_recursive(data)
+        if not player_level:
+            player_level = await fetch_player_level(uid)
+
         likes_given = details.get("LikesGivenByAPI", 0)
         try:
             likes_given_int = int(likes_given)
@@ -245,11 +312,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "❌ **ЛАЙК НАРАФТ**\n"
                 "━━━━━━━━━━━\n"
                 f"👤 **Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
+                f"📶 **Level:** `{player_level}`\n"
                 f"🆔 **UID:** `{details.get('UID', uid)}`\n"
                 f"📊 **Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
                 f"👍 **Илова шуд:** `0`\n\n"
-                "⚠️ *Аккаунт лимити рӯзона дорад ё ном рамзҳои махсус дорад.*",
-                parse_mode="Markdown"
+                "⚠️ *Аккаунт лимити рӯзона дорад ё ном рамзҳои махсус дорад.*"
+                f"{VIP_PROMO_FOOTER}",
+                parse_mode="Markdown",
+                reply_markup=DEVELOPER_KEYBOARD
             )
             return
 
@@ -260,7 +330,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "`[██████████]` **100%**",
                 parse_mode="Markdown"
             )
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.55)
         except Exception:
             pass
 
@@ -268,6 +338,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✅ **ЛАЙКҲО ФИРИСТОДА ШУДАНД!**\n"
             "━━━━━━━━━━━\n"
             f"👤 **Ном:** `{details.get('PlayerNickname', 'N/A')}`\n"
+            f"📶 **Level:** `{player_level}`\n"
             f"🆔 **UID:** `{details.get('UID', uid)}`\n"
             "━━━━━━━━━━━\n"
             f"📉 **Пеш аз лайк:** `{details.get('LikesbeforeCommand', 'N/A')}`\n"
@@ -275,9 +346,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📈 **Баъд аз лайк:** `{details.get('LikesafterCommand', 'N/A')}`\n"
             "━━━━━━━━━━━\n"
             "⏳ *Дархости навбатӣ пас аз 24 соат!*"
+            f"{VIP_PROMO_FOOTER}"
         )
 
-        await progress.edit_text(message, parse_mode="Markdown")
+        await progress.edit_text(
+            message,
+            parse_mode="Markdown",
+            reply_markup=DEVELOPER_KEYBOARD
+        )
 
     except Exception as e:
         if not admin_flag:
