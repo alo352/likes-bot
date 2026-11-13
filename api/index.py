@@ -6,7 +6,7 @@ import logging
 import aiohttp
 from fastapi import FastAPI, Request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -22,6 +22,7 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004354930364]
 
 COOLDOWN_TIME = 86400  # 24 соат
+DEFAULT_LIKES_AMOUNT = 200  # Миқдори стандартӣ ҳангоми навиштани /like <UID>
 CACHE_FILE = "/tmp/ff_cooldowns.json"
 
 memory_users = {}  # { "tg_user_id": timestamp }
@@ -30,29 +31,12 @@ vip_uids = {}      # { "ff_uid": expire_timestamp }
 ptb_application = None
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("💎 НАРХНОМАИ VIP", callback_data="vip_prices"),
-        InlineKeyboardButton("👨‍💻 АДМИН (@parnetka)", url="https://t.me/parnetka")
-    ]
+    [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
 ])
 
-VIP_PRICES_TEXT = (
-    "🔥 **VIP AUTOLIKE — АЗ ҲАМА АРЗОНТАР (5% ТАХФИФ)!** 🔥\n"
-    "━━━━━━━━━━━\n"
-    "⚡️ *Бе навбат, бе лимити 24-соата ва бе интизорӣ!*\n\n"
-    "💎 **ТАРИФҲОИ VIP:**\n"
-    "1️⃣ **1 РӮЗ VIP** (700+ лайк/рӯз) — ~~35 ⭐️~~ **33 ⭐️** *(ё 6 с.)*\n"
-    "3️⃣ **3 РӮЗ VIP** (700+ лайк/рӯз) — ~~95 ⭐️~~ **90 ⭐️** *(ё 16 с.)*\n"
-    "7️⃣ **7 РӮЗ VIP** (700+ лайк/рӯз) — ~~210 ⭐️~~ **199 ⭐️** *(ё 35 с.)*\n"
-    "🔟 **10 РӮЗ VIP** (700+ лайк/рӯз) — ~~300 ⭐️~~ **285 ⭐️** *(ё 50 с.)*\n\n"
-    "💳 **Пардохт:** **Alif / DC City** ё **Telegram Stars ⭐️**\n"
-    "🛡️ *100% бехатар ва бе бан!*\n\n"
-    "👉 Барои пайвастшавӣ UID-ро ба админ партоед: **@parnetka**"
-)
-
 VIP_PROMO_FOOTER = (
-    "\n\n💎 **МЕХОҲЕД VIP AUTOLIKE ХАРЕД?**\n"
-    "⚡️ *Бе интизории 24 соат ва бо 5% тахфиф!*\n"
+    "\n\n💎 **МЕХОҲЕД 400+ VIP LIKE ХАРЕД?**\n"
+    "⚡️ *Бе интизории 24 соат ва бо суръати баланд!*\n"
     "📩 **Ба админ муроҷиат кунед:** 👉 **@parnetka**"
 )
 
@@ -60,7 +44,7 @@ ACCESS_DENIED_TEXT = (
     "🚫 **ДАСТРАСӢ МАҲДУД АСТ!**\n"
     "━━━━━━━━━━━\n"
     "🔒 *Ин бот танҳо дар гурӯҳҳои расмии мо ва барои мизоҷони VIP фаъол аст.*\n\n"
-    "✨ **Мехоҳед VIP гиред ё ба ботамон дастрасӣ пайдо кунед?**\n"
+    "✨ **Мехоҳед ба ботамон дастрасӣ ё Ключи шахсӣ гиред?**\n"
     "📩 Ҳозир ба админ муроҷиат кунед:\n"
     "👉 **@parnetka**\n"
     "━━━━━━━━━━━\n"
@@ -202,20 +186,6 @@ async def check_group_access(update: Update, is_vip: bool = False) -> bool:
     return chat.id in ALLOWED_GROUPS
 
 
-async def vip_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-    await query.message.reply_text(
-        VIP_PRICES_TEXT,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📩 ХАРИД АЗ АДМИН (@parnetka)", url="https://t.me/parnetka")]
-        ])
-    )
-
-
 async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
@@ -230,7 +200,7 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def send_likes_batch(uid: str, target_amount: int) -> dict:
-    """Мувофиқи миқдори дархостшуда (масалан 200 ё 400) дархост мефиристад."""
+    """Мувофиқи миқдори дархостшуда (200, 400 ё 700) ба API дархост мефиристад."""
     total_added = 0
     first_before = None
     last_after = None
@@ -239,7 +209,6 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     last_error = ""
     raw_first = {}
 
-    # Шумораи дархостҳо (ҳар дархости API одатан 100 лайк медиҳад; агар 200 диҳад, дар 1 бор тамом мешавад)
     max_calls = max(1, (target_amount + 99) // 100)
 
     async with aiohttp.ClientSession() as session:
@@ -247,7 +216,6 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
             if total_added >= target_amount:
                 break
 
-            # Дархости аввал бо &amount=target_amount санҷида мешавад
             if i == 0:
                 url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}&amount={target_amount}"
             else:
@@ -322,23 +290,29 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int):
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
 
-    # Формати фармон: /like 200 <UID>
-    if len(context.args) != 2:
+    # Дастгирии ҳар ду формат:
+    # 1) /like <UID>        -> 200 лайк
+    # 2) /like 200 <UID>    -> 200 лайк (ё 400/700 барои VIP)
+    if len(context.args) == 1:
+        amount_str = str(DEFAULT_LIKES_AMOUNT)
+        uid = context.args[0].strip()
+    elif len(context.args) == 2:
+        amount_str = context.args[0].strip()
+        uid = context.args[1].strip()
+    else:
         if not await check_group_access(update):
             return
         await update.message.reply_text(
             "⚠️ **ТАРЗИ ИСТИФОДАБАРӢ**\n"
             "━━━━━━━━━━━\n"
-            "👉 Фармон: `/like 200 {UID}`\n"
-            "📌 Намуна: `/like 200 18778177236`"
+            "👉 `/like {UID}` ё `/like 200 {UID}`\n"
+            "📌 Намуна: `/like 18778177236`\n"
+            "📌 Намуна 2: `/like 200 18778177236`"
             f"{VIP_PROMO_FOOTER}",
             parse_mode="Markdown",
             reply_markup=DEVELOPER_KEYBOARD
         )
         return
-
-    amount_str = context.args[0].strip()
-    uid = context.args[1].strip()
 
     if not amount_str.isdigit() or not uid.isdigit() or not (8 <= len(uid) <= 12):
         if not await check_group_access(update):
@@ -346,8 +320,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ **ФОРМАТИ ХАТО!**\n"
             "━━━━━━━━━━━\n"
-            "Лутфан миқдори лайк ва UID-ро дуруст нависед:\n"
-            "📌 Намуна: `/like 200 18778177236`",
+            "Лутфан дуруст нависед:\n"
+            "📌 `/like 18778177236` ё `/like 200 18778177236`",
             parse_mode="Markdown"
         )
         return
@@ -360,13 +334,13 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_group_access(update, is_vip=vip_flag):
         return
 
-    # Корбарони оддӣ танҳо 200 лайк зада метавонанд; VIP ва Админ то 700
     if not admin_flag and not vip_flag:
         if amount != 200:
             await update.message.reply_text(
                 "⚠️ **ТАНҲО 200 ЛАЙК ДАСТРАС АСТ!**\n"
                 "━━━━━━━━━━━\n"
-                "Барои корбарони оддӣ фармони дуруст:\n"
+                "Барои корбарони оддӣ фармонҳои дуруст:\n"
+                f"👉 `/like {uid}`\n"
                 f"👉 `/like 200 {uid}`\n\n"
                 "💎 *Барои гирифтани 400–700 лайк дар як рӯз, VIP харед!*"
                 f"{VIP_PROMO_FOOTER}",
@@ -618,7 +592,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━\n"
         f"🆔 **UID:** `{uid}`\n"
         f"⏳ **Мӯҳлат:** `{days} рӯз`\n"
-        "✅ Акнун ин муштарӣ метавонад `/like 400 <UID>` ё `/like 700 <UID>` занад!",
+        "✅ Акнун ин муштарӣ метавонад `/like <UID>`, `/like 400 <UID>` ё `/like 700 <UID>` занад!",
         parse_mode="Markdown"
     )
 
@@ -687,7 +661,6 @@ async def ensure_bot_ready():
         ptb_application.add_handler(CommandHandler("addvip", addvip_command))
         ptb_application.add_handler(CommandHandler("delvip", delvip_command))
         ptb_application.add_handler(CommandHandler("viplist", viplist_command))
-        ptb_application.add_handler(CallbackQueryHandler(vip_prices_callback, pattern="^vip_prices$"))
         ptb_application.add_handler(MessageHandler(filters.ChatType.PRIVATE, handle_private_messages))
         await ptb_application.initialize()
         await ptb_application.start()
