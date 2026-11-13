@@ -28,7 +28,6 @@ memory_users = {}
 memory_uids = {}
 ptb_application = None
 
-# Тугмаи зери паём (ба монанди расми шумо)
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
 ])
@@ -388,23 +387,30 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
 
-    load_cache()
     if not context.args:
-        memory_users.clear()
-        memory_uids.clear()
-        save_cache()
-        await update.message.reply_text("✅ **Ҳамаи лимитҳои 24-соата тоза шуданд!**", parse_mode="Markdown")
+        await update.message.reply_text(
+            "⚠️ **Лутфан ID ё UID-и мушаххасро нависед!**\n"
+            "📌 Намуна: `/reset 15853201485`",
+            parse_mode="Markdown"
+        )
         return
 
+    load_cache()
     target = context.args[0].strip()
     removed_user = memory_users.pop(target, None)
     removed_uid = memory_uids.pop(target, None)
     save_cache()
 
     if removed_user or removed_uid:
-        await update.message.reply_text(f"✅ **Лимит барои `{target}` бомуваффақият гирифта шуд!**", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"✅ **Лимит танҳо барои `{target}` бомуваффақият гирифта шуд!**",
+            parse_mode="Markdown"
+        )
     else:
-        await update.message.reply_text(f"ℹ️ Барои `{target}` ягон лимити фаъол ёфт нашуд.", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"ℹ️ Барои `{target}` ягон лимити фаъол ёфт нашуд.",
+            parse_mode="Markdown"
+        )
 
 
 app = FastAPI()
