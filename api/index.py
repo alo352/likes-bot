@@ -136,6 +136,15 @@ def format_remaining(seconds_left: float) -> str:
     return f"{seconds} сония"
 
 
+def format_hms(seconds_left: float) -> str:
+    """Формати дақиқи соат:дақиқа:сония (масалан: 21:45:12)"""
+    total_sec = max(0, int(seconds_left))
+    hours = total_sec // 3600
+    minutes = (total_sec % 3600) // 60
+    seconds = total_sec % 60
+    return f"{hours:02d}с : {minutes:02d}д : {seconds:02d}сон"
+
+
 def clean_name(name: str) -> str:
     if not name:
         return "Корбар"
@@ -204,7 +213,6 @@ async def check_group_access(update: Update, is_vip: bool = False) -> bool:
 
 
 async def handle_admin_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вақте админ дар шахсӣ GIF мефиристад, онро барои натиҷаи /like насб мекунад."""
     global like_gif_id
     user = update.effective_user
     chat = update.effective_chat
@@ -248,7 +256,6 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def send_likes_batch(uid: str, target_amount: int) -> dict:
-    """Танҳо аз Сервери 1 (fflikes.ucbot.net) истифода мебарад."""
     total_added = 0
     first_before = None
     last_after = None
@@ -399,6 +406,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = str(user.id)
     now = time.time()
+    tg_full_name = clean_name(user.full_name or user.first_name)
 
     if not admin_flag and not vip_flag:
         if user_id in memory_users:
@@ -408,7 +416,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     "⏳ <b>ЛИМИТИ 24-СОАТА</b>\n"
                     "━━━━━━━━━━━\n"
-                    f"👤 <b>Корбар:</b> <code>{escape_html(clean_name(user.first_name))}</code>\n"
+                    f"👤 <b>Корбар:</b> <code>{escape_html(tg_full_name)}</code>\n"
                     "🚫 Шумо имрӯз аллакай лайк гирифтаед!\n\n"
                     f"🕒 <b>Боқимонда:</b> <code>{rem}</code>\n"
                     "💡 <i>Пас аз гузаштани вақт дубора кӯшиш кунед.</i>"
@@ -440,7 +448,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         memory_uids[uid] = {
             "time": now,
             "user_id": user_id,
-            "name": clean_name(user.first_name)
+            "name": tg_full_name
         }
         await save_state()
 
@@ -678,6 +686,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Рӯйхати ҲАМАИ лимитҳои 24-соата бо тарҳи зебо, номи аккаунти TG, UID ва вақти ТЧК"""
     if not is_admin_user(update.effective_user):
         return
 
@@ -718,42 +727,49 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not active_items:
         await update.message.reply_text(
-            "✅ **ҲАМАИ АЪЗОЁНИ ГУРӮҲ ОЗОДАНД!**\n"
+            "✅ <b>ҲАМАИ АЪЗОЁНИ ГУРӮҲ ОЗОДАНД!</b>\n"
             "━━━━━━━━━━━\n"
-            "Айни ҳол ягон ID дар лимити 24-соата нест. Ҳама метавонанд `/like` зананд!",
-            parse_mode="Markdown"
+            "Айни ҳол ягон аккаунт дар лимити 24-соата нест. Ҳама метавонанд <code>/like</code> зананд!",
+            parse_mode="HTML"
         )
         return
 
     active_items.sort(key=lambda x: x[0])
 
-    lines = [
-        f"📋 **РӮЙХАТИ ЛИМИТҲОИ 24-СОАТА ({len(active_items)} нафар):**",
-        "━━━━━━━━━━━"
-    ]
+    header = (
+        f"🔥 <b>Parnetka Likes — РӮЙХАТИ ЛИМИТҲО</b>\n"
+        f"👥 <b>Ҳамагӣ дар лимит:</b> <code>{len(active_items)} нафар</code>\n"
+        f"🇹🇯 <b>Вақти Тоҷикистон (ТЧК):</b> <code>{datetime.fromtimestamp(now, tz=tj_tz).strftime('%H:%M:%S')}</code>\n"
+    )
 
+    blocks = []
     for idx, (unlock_ts, uid, u_name, u_id) in enumerate(active_items, start=1):
-        rem_str = format_remaining(unlock_ts - now)
+        rem_hms = format_hms(unlock_ts - now)
         unlock_clock = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%H:%M:%S (%d.%m)")
-        lines.append(
-            f"{idx}. 🆔 `{uid}` ({u_name})\n"
-            f"   ⏳ **Боқимонда:** `{rem_str}`\n"
-            f"   🔓 **Кушодашавӣ:** `{unlock_clock}`"
-        )
+        safe_name = escape_html(u_name)
+        user_link = f'<a href="tg://user?id={u_id}">{safe_name}</a>' if u_id else f"<b>{safe_name}</b>"
 
-    full_text = "\n".join(lines)
-    if len(full_text) <= 4000:
-        await update.message.reply_text(full_text, parse_mode="Markdown")
-    else:
-        chunk = ""
-        for line in lines:
-            if len(chunk) + len(line) + 2 > 3900:
-                await update.message.reply_text(chunk, parse_mode="Markdown")
-                chunk = line
-            else:
-                chunk = f"{chunk}\n{line}" if chunk else line
-        if chunk:
-            await update.message.reply_text(chunk, parse_mode="Markdown")
+        block = (
+            "<blockquote>"
+            f"<b>{idx}.</b> 👤 {user_link}\n"
+            f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+            f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
+            f"🔓 <b>Тамомшавӣ (ТЧК):</b> <code>{unlock_clock}</code>"
+            "</blockquote>"
+        )
+        blocks.append(block)
+
+    # Тақсимбандии бехатар барои паёмҳои Telegram
+    current_msg = header
+    for block in blocks:
+        if len(current_msg) + len(block) + 2 > 3900:
+            await update.message.reply_text(current_msg, parse_mode="HTML")
+            current_msg = block
+        else:
+            current_msg = f"{current_msg}\n{block}"
+
+    if current_msg:
+        await update.message.reply_text(current_msg, parse_mode="HTML")
 
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
