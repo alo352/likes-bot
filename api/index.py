@@ -7,7 +7,7 @@ import aiohttp
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ChatMemberHandler, filters, ContextTypes
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -161,6 +161,43 @@ async def fetch_player_level(uid: str) -> str:
     return "N/A"
 
 
+async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Муайян мекунад, ки касе ботро аз гурӯҳ удалит кард ё баровард"""
+    result = update.my_chat_member
+    if not result:
+        return
+
+    chat = result.chat
+    user = result.from_user
+    new_status = result.new_chat_member.status
+
+    # Агар бот аз гурӯҳ хориҷ карда шуда бошад (left ё kicked)
+    if new_status in ["left", "kicked"]:
+        try:
+            user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
+            user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
+            username_str = f" (@{user.username})" if user.username else ""
+            chat_title = escape_html(chat.title or "Гурӯҳ")
+            
+            alert_text = (
+                f"🗑 <b>БОТ АЗ ГУРУҲ БАРОВАРДА ШУД!</b>\n"
+                f"━━━━━━━━━━━\n"
+                f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b> (ID: <code>{chat.id}</code>)\n"
+                f"👤 <b>Кӣ баровард?:</b> {user_mention}{escape_html(username_str)}\n"
+                f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
+                f"⚠️ <i>Бот бо муваффақият аз ин гурӯҳ ва аз ин аккаунт хориҷ карда шуд!</i>"
+            )
+            
+            for admin_id in ADMIN_IDS:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=alert_text,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            logging.error(f"Bot removal tracking error: {e}")
+
+
 async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
     user = update.effective_user
@@ -171,16 +208,17 @@ async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     # Агар бот дар гурӯҳи нодуруст/бегона истифода шавад
     if chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS:
-        # Хабар додан ба админ (Парнетка) дар шахсӣ
         try:
-            user_mention = f"<a href='tg://user?id={user.id}'>{escape_html(user.full_name or 'Номаълум')}</a>"
+            user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
+            user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
+            username_str = f" (@{user.username})" if user.username else ""
             chat_title = escape_html(chat.title or "Номаълум")
             chat_username = f" (@{chat.username})" if chat.username else f" (ID: `{chat.id}`)"
             
             alert_text = (
                 f"🚨 <b>ҲУШДОР АМНИЯТӢ!</b>\n"
                 f"━━━━━━━━━━━\n"
-                f"👤 <b>Корбар:</b> {user_mention}\n"
+                f"👤 <b>Ном:</b> {user_mention}{escape_html(username_str)}\n"
                 f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
                 f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{chat_username}\n"
                 f"⚡ <i>Кӯшиш кард боти шуморо дар ин гурӯҳ истифода барад!</i>"
@@ -663,6 +701,7 @@ async def ensure_bot_ready():
         ptb_application.add_handler(CommandHandler("delvip", delvip_command))
         ptb_application.add_handler(CommandHandler("viplist", viplist_command))
         ptb_application.add_handler(CommandHandler("delgif", delgif_command))
+        ptb_application.add_handler(ChatMemberHandler(track_bot_removal, ChatMemberHandler.MY_CHAT_MEMBER))
         ptb_application.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.ANIMATION, handle_admin_gif))
         ptb_application.add_handler(MessageHandler(filters.ChatType.PRIVATE, handle_private_messages))
         await ptb_application.initialize()
