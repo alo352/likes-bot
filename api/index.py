@@ -26,11 +26,10 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004354930364]
 
 COOLDOWN_TIME = 86400  # 24 соат
-DEFAULT_LIKES_AMOUNT = 200
+DEFAULT_LIKES_AMOUNT = 100  # Сарфаи маблағ: 100 лайк барои корбарони оддӣ
 CACHE_FILE = "/tmp/ff_cooldowns.json"
 
-memory_users = {}  # { "tg_user_id": timestamp }
-memory_uids = {}   # { "ff_uid": {"time": timestamp, "user_id": "tg_user_id", "name": "..."} }
+memory_uids = {}   # Танҳо UID-и бозӣ лимит мешавад: { "ff_uid": {"time": timestamp, "user_id": "tg_user_id", "name": "..."} }
 vip_uids = {}      # { "ff_uid": expire_timestamp }
 like_gif_id = ""   # file_id-и GIF-и Parnetka Likes
 ptb_application = None
@@ -40,7 +39,7 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\n💎 <b>МЕХОҲЕД 400+ VIP LIKE ХАРЕД?</b>\n"
+    "\n\n💎 <b>МЕХОҲЕД 200+ VIP LIKE ХАРЕД?</b>\n"
     "⚡️ <i>Бе интизории 24 соат ва бо суръати баланд!</i>\n"
     "📩 <b>Ба админ муроҷиат кунед:</b> 👉 <b>@parnetka</b>"
 )
@@ -58,12 +57,11 @@ ACCESS_DENIED_TEXT = (
 
 
 async def load_state():
-    global memory_users, memory_uids, vip_uids, like_gif_id
+    global memory_uids, vip_uids, like_gif_id
     try:
         if os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, "r") as f:
                 data = json.load(f)
-                memory_users = data.get("users", {})
                 memory_uids = data.get("uids", {})
                 vip_uids = data.get("vips", {})
                 like_gif_id = data.get("like_gif_id", "")
@@ -76,13 +74,11 @@ async def load_state():
                 if resp.status == 200:
                     fb_data = await resp.json()
                     if isinstance(fb_data, dict):
-                        memory_users = fb_data.get("users", memory_users) or {}
                         memory_uids = fb_data.get("uids", memory_uids) or {}
                         vip_uids = fb_data.get("vips", vip_uids) or {}
                         like_gif_id = fb_data.get("like_gif_id", like_gif_id) or ""
                         with open(CACHE_FILE, "w") as f:
                             json.dump({
-                                "users": memory_users,
                                 "uids": memory_uids,
                                 "vips": vip_uids,
                                 "like_gif_id": like_gif_id
@@ -93,7 +89,6 @@ async def load_state():
 
 async def save_state():
     payload = {
-        "users": memory_users,
         "uids": memory_uids,
         "vips": vip_uids,
         "like_gif_id": like_gif_id
@@ -137,7 +132,6 @@ def format_remaining(seconds_left: float) -> str:
 
 
 def format_hms(seconds_left: float) -> str:
-    """Формати дақиқи соат:дақиқа:сония (масалан: 21:45:12)"""
     total_sec = max(0, int(seconds_left))
     hours = total_sec // 3600
     minutes = (total_sec % 3600) // 60
@@ -294,7 +288,7 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
                 added = int(details.get("LikesGivenByAPI", 0) or 0)
                 if added <= 0:
                     if total_added == 0:
-                        last_error = "Лимити рӯзонаи аккаунт пур шудааст"
+                        last_error = "Лимити рӯзонаи аккаунти бозӣ пур шудааст"
                     break
 
                 total_added += added
@@ -353,9 +347,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ</b>\n"
             "━━━━━━━━━━━\n"
-            "👉 <code>/like {UID}</code> ё <code>/like 200 {UID}</code>\n"
+            "👉 <code>/like {UID}</code> ё <code>/like 100 {UID}</code>\n"
             "📌 Намуна: <code>/like 18778177236</code>\n"
-            "📌 Намуна 2: <code>/like 200 18778177236</code>"
+            "📌 Намуна 2: <code>/like 100 18778177236</code>"
             f"{VIP_PROMO_FOOTER}",
             parse_mode="HTML",
             reply_markup=DEVELOPER_KEYBOARD
@@ -369,7 +363,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ **ФОРМАТИ ХАТО!**\n"
             "━━━━━━━━━━━\n"
             "Лутфан дуруст нависед:\n"
-            "📌 `/like 18778177236` ё `/like 200 18778177236`",
+            "📌 `/like 18778177236` ё `/like 100 18778177236`",
             parse_mode="Markdown"
         )
         return
@@ -383,14 +377,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not admin_flag and not vip_flag:
-        if amount != 200:
+        if amount != 100:
             await update.message.reply_text(
-                "⚠️ <b>ТАНҲО 200 ЛАЙК ДАСТРАС АСТ!</b>\n"
+                "⚠️ <b>ТАНҲО 100 ЛАЙК ДАСТРАС АСТ!</b>\n"
                 "━━━━━━━━━━━\n"
                 "Барои корбарони оддӣ фармонҳои дуруст:\n"
                 f"👉 <code>/like {uid}</code>\n"
-                f"👉 <code>/like 200 {uid}</code>\n\n"
-                "💎 <i>Барои гирифтани 400–700 лайк дар як рӯз, VIP харед!</i>"
+                f"👉 <code>/like 100 {uid}</code>\n\n"
+                "💎 <i>Барои гирифтани 200+ лайк дар як рӯз, VIP харед!</i>"
                 f"{VIP_PROMO_FOOTER}",
                 parse_mode="HTML",
                 reply_markup=DEVELOPER_KEYBOARD
@@ -408,24 +402,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     tg_full_name = clean_name(user.full_name or user.first_name)
 
+    # ТАНҲО UID-и бозӣ санҷида мешавад (аккаунти Telegram лимит надорад)
     if not admin_flag and not vip_flag:
-        if user_id in memory_users:
-            elapsed = now - float(memory_users[user_id])
-            if elapsed < COOLDOWN_TIME:
-                rem = format_remaining(COOLDOWN_TIME - elapsed)
-                await update.message.reply_text(
-                    "⏳ <b>ЛИМИТИ 24-СОАТА</b>\n"
-                    "━━━━━━━━━━━\n"
-                    f"👤 <b>Корбар:</b> <code>{escape_html(tg_full_name)}</code>\n"
-                    "🚫 Шумо имрӯз аллакай лайк гирифтаед!\n\n"
-                    f"🕒 <b>Боқимонда:</b> <code>{rem}</code>\n"
-                    "💡 <i>Пас аз гузаштани вақт дубора кӯшиш кунед.</i>"
-                    f"{VIP_PROMO_FOOTER}",
-                    parse_mode="HTML",
-                    reply_markup=DEVELOPER_KEYBOARD
-                )
-                return
-
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -433,18 +411,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if elapsed_uid < COOLDOWN_TIME:
                 rem = format_remaining(COOLDOWN_TIME - elapsed_uid)
                 await update.message.reply_text(
-                    "⚠️ <b>АККАУНТ ДАР ЛИМИТ</b>\n"
+                    "⚠️ <b>ИН ID-И БОЗӢ ДАР ЛИМИТ АСТ</b>\n"
                     "━━━━━━━━━━━\n"
                     f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                    "🚫 Ба ин аккаунт имрӯз аллакай лайк фиристода шудааст!\n\n"
-                    f"🕒 <b>Боқимонда:</b> <code>{rem}</code>"
+                    "🚫 Ба ин аккаунти Free Fire дар 24 соати охир аллакай лайк фиристода шудааст!\n\n"
+                    f"🕒 <b>Боқимонда:</b> <code>{rem}</code>\n"
+                    "💡 <i>Шумо метавонед ба дигар ID-и бозӣ лайк занед.</i>"
                     f"{VIP_PROMO_FOOTER}",
                     parse_mode="HTML",
                     reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
-        memory_users[user_id] = now
         memory_uids[uid] = {
             "time": now,
             "user_id": user_id,
@@ -468,13 +446,13 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if res["total_added"] <= 0:
             err_msg = res["error"]
-            if "maximum" in err_msg.lower() or "already" in err_msg.lower():
+            if "maximum" in err_msg.lower() or "already" in err_msg.lower() or "лимит" in err_msg.lower():
                 await progress.edit_text(
-                    "⏳ <b>ЛИМИТИ РӮЗОНА ПУР</b>\n"
+                    "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ</b>\n"
                     "━━━━━━━━━━━\n"
                     f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                    "⚠️ Ин аккаунт имрӯз аллакай лимити максималии лайкро гирифтааст!\n\n"
-                    "🕒 <b>Лутфан пас аз 24 соат кӯшиш кунед.</b>"
+                    "⚠️ Худи аккаунти Free Fire имрӯз аллакай лимити лайкро гирифтааст!\n\n"
+                    "💡 <i>Метавонед ба дигар UID лайк занед ё пас аз 24 соат кӯшиш кунед.</i>"
                     f"{VIP_PROMO_FOOTER}",
                     parse_mode="HTML",
                     reply_markup=DEVELOPER_KEYBOARD
@@ -482,7 +460,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             if not admin_flag and not vip_flag:
-                memory_users.pop(user_id, None)
                 memory_uids.pop(uid, None)
                 await save_state()
 
@@ -504,7 +481,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_line = (
             f"💎 <b>VIP STATUS:</b> Боқимонда <code>{format_remaining(float(vip_uids[uid]) - time.time())}</code>"
             if vip_flag else
-            "⏳ <i>Дархости навбатӣ пас аз 24 соат!</i>"
+            "⏳ <i>Лайки навбатӣ ба ин UID пас аз 24 соат!</i>"
         )
 
         caption_html = (
@@ -541,7 +518,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         if not admin_flag and not vip_flag:
-            memory_users.pop(user_id, None)
             memory_uids.pop(uid, None)
             await save_state()
         logging.error(f"/like error: {e}")
@@ -574,7 +550,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ **Лутфан ID ё UID-и мушаххасро нависед!**\n"
+            "⚠️ **Лутфан UID-и мушаххасро нависед!**\n"
             "Лимити гурӯҳ пок нашуд.\n\n"
             "📌 Намуна: `/reset 18778177236`",
             parse_mode="Markdown"
@@ -583,32 +559,22 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target = context.args[0].strip()
     if not target.isdigit():
-        await update.message.reply_text("❌ Танҳо рақами UID ё Telegram ID-ро ворид кунед.")
+        await update.message.reply_text("❌ Танҳо рақами UID-ро ворид кунед.")
         return
 
     await load_state()
-
-    removed_user = memory_users.pop(target, None)
     removed_uid = memory_uids.pop(target, None)
-
-    linked_user_id = None
-    if isinstance(removed_uid, dict):
-        linked_user_id = removed_uid.get("user_id")
-        if linked_user_id:
-            memory_users.pop(str(linked_user_id), None)
-
     await save_state()
 
-    if removed_user is not None or removed_uid is not None:
-        extra = f" (ва корбари `{linked_user_id}`)" if linked_user_id else ""
+    if removed_uid is not None:
         await update.message.reply_text(
-            f"✅ **Лимит ТАНҲО барои `{target}`{extra} гирифта шуд!**\n"
-            "Дигар аъзоёни гурӯҳ дар лимит мемонанд.",
+            f"✅ **Лимит ТАНҲО барои UID `{target}` гирифта шуд!**\n"
+            "Дигар UID-ҳо дар лимит мемонанд.",
             parse_mode="Markdown"
         )
     else:
         await update.message.reply_text(
-            f"ℹ️ Барои `{target}` ягон лимити фаъол ёфт нашуд.",
+            f"ℹ️ Барои UID `{target}` ягон лимити фаъол ёфт нашуд.",
             parse_mode="Markdown"
         )
 
@@ -627,7 +593,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target = context.args[0].strip()
     if not target.isdigit():
-        await update.message.reply_text("❌ Танҳо рақами UID ё Telegram ID-ро ворид кунед.")
+        await update.message.reply_text("❌ Танҳо рақами UID-ро ворид кунед.")
         return
 
     await load_state()
@@ -641,7 +607,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "💎 **ҲОЛАТИ АККАУНТ: VIP**\n"
             "━━━━━━━━━━━\n"
-            f"🆔 **ID:** `{target}`\n"
+            f"🆔 **UID:** `{target}`\n"
             "✅ Бе лимити 24-соата кор мекунад!\n"
             f"⏳ **Мӯҳлати VIP:** `{rem_vip}` (то `{exp_str}`)",
             parse_mode="Markdown"
@@ -655,22 +621,20 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         entry = memory_uids[target]
         if isinstance(entry, dict):
             found_ts = float(entry.get("time", 0))
-            linked_user = entry.get("user_id")
+            linked_user = entry.get("name")
         else:
             found_ts = float(entry)
-    elif target in memory_users:
-        found_ts = float(memory_users[target])
 
     if found_ts and (now - found_ts) < COOLDOWN_TIME:
         unlock_ts = found_ts + COOLDOWN_TIME
         rem_str = format_remaining(unlock_ts - now)
         unlock_time_str = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%d.%m.%Y соати %H:%M:%S")
-        user_info = f"\n👤 **Telegram ID:** `{linked_user}`" if linked_user else ""
+        user_info = f"\n👤 **Фиристодашуда аз:** `{linked_user}`" if linked_user else ""
 
         await update.message.reply_text(
             "⏳ **ҲОЛАТИ ЛИМИТ: ФАЪОЛ**\n"
             "━━━━━━━━━━━\n"
-            f"🆔 **ID:** `{target}`{user_info}\n"
+            f"🆔 **UID:** `{target}`{user_info}\n"
             f"🕒 **Боқимонда:** `{rem_str}`\n"
             f"🔓 **Вақти кушодашавӣ:** `{unlock_time_str}`",
             parse_mode="Markdown"
@@ -679,14 +643,13 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "✅ **ЛИМИТ НЕСТ (ОЗОД АСТ)!**\n"
             "━━━━━━━━━━━\n"
-            f"🆔 **ID:** `{target}`\n"
-            "🚀 Ин аккаунт метавонад ҳамин ҳозир `/like` занад.",
+            f"🆔 **UID:** `{target}`\n"
+            "🚀 Ба ин аккаунт метавонед ҳамин ҳозир `/like` занед.",
             parse_mode="Markdown"
         )
 
 
 async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Рӯйхати ҲАМАИ лимитҳои 24-соата бо тарҳи зебо, номи аккаунти TG, UID ва вақти ТЧК"""
     if not is_admin_user(update.effective_user):
         return
 
@@ -696,7 +659,6 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     active_items = []
     expired_uids = []
-    expired_users = []
 
     for uid, entry in memory_uids.items():
         if isinstance(entry, dict):
@@ -714,22 +676,16 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             expired_uids.append(uid)
 
-    for u_id, ts in memory_users.items():
-        if (float(ts) + COOLDOWN_TIME) <= now:
-            expired_users.append(u_id)
-
-    if expired_uids or expired_users:
+    if expired_uids:
         for u in expired_uids:
             memory_uids.pop(u, None)
-        for usr in expired_users:
-            memory_users.pop(usr, None)
         await save_state()
 
     if not active_items:
         await update.message.reply_text(
-            "✅ <b>ҲАМАИ АЪЗОЁНИ ГУРӮҲ ОЗОДАНД!</b>\n"
+            "✅ <b>ҲАМАИ UID-ҲО ОЗОДАНД!</b>\n"
             "━━━━━━━━━━━\n"
-            "Айни ҳол ягон аккаунт дар лимити 24-соата нест. Ҳама метавонанд <code>/like</code> зананд!",
+            "Айни ҳол ягон ID-и бозӣ дар лимити 24-соата нест. Ҳама метавонанд <code>/like</code> зананд!",
             parse_mode="HTML"
         )
         return
@@ -738,7 +694,7 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     header = (
         f"🔥 <b>Parnetka Likes — РӮЙХАТИ ЛИМИТҲО</b>\n"
-        f"👥 <b>Ҳамагӣ дар лимит:</b> <code>{len(active_items)} нафар</code>\n"
+        f"🎮 <b>Ҳамагӣ UID дар лимит:</b> <code>{len(active_items)} то</code>\n"
         f"🇹🇯 <b>Вақти Тоҷикистон (ТЧК):</b> <code>{datetime.fromtimestamp(now, tz=tj_tz).strftime('%H:%M:%S')}</code>\n"
     )
 
@@ -759,7 +715,6 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         blocks.append(block)
 
-    # Тақсимбандии бехатар барои паёмҳои Telegram
     current_msg = header
     for block in blocks:
         if len(current_msg) + len(block) + 2 > 3900:
@@ -794,9 +749,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await load_state()
     vip_uids[uid] = time.time() + (days * 86400)
-    removed_uid = memory_uids.pop(uid, None)
-    if isinstance(removed_uid, dict) and removed_uid.get("user_id"):
-        memory_users.pop(str(removed_uid["user_id"]), None)
+    memory_uids.pop(uid, None)
     await save_state()
 
     await update.message.reply_text(
@@ -804,7 +757,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━\n"
         f"🆔 **UID:** `{uid}`\n"
         f"⏳ **Мӯҳлат:** `{days} рӯз`\n"
-        "✅ Акнун ин муштарӣ метавонад `/like <UID>`, `/like 400 <UID>` ё `/like 700 <UID>` занад!",
+        "✅ Акнун ин муштарӣ метавонад `/like <UID>`, `/like 200 <UID>` ё `/like 400 <UID>` занад!",
         parse_mode="Markdown"
     )
 
