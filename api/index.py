@@ -16,7 +16,6 @@ logging.basicConfig(
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
 
-# Танҳо Сервери 1 (Асосӣ)
 LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
 BASE_API_URL = "https://fflikes.ucbot.net"
 
@@ -26,12 +25,12 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004354930364]
 
 COOLDOWN_TIME = 86400  # 24 соат
-DEFAULT_LIKES_AMOUNT = 100  # Сарфаи маблағ: 100 лайк барои корбарони оддӣ
+DEFAULT_LIKES_AMOUNT = 100
 CACHE_FILE = "/tmp/ff_cooldowns.json"
 
-memory_uids = {}   # Танҳо UID-и бозӣ лимит мешавад: { "ff_uid": {"time": timestamp, "user_id": "tg_user_id", "name": "..."} }
-vip_uids = {}      # { "ff_uid": expire_timestamp }
-like_gif_id = ""   # file_id-и GIF-и Parnetka Likes
+memory_uids = {}
+vip_uids = {}
+like_gif_id = ""
 ptb_application = None
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
@@ -402,7 +401,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     tg_full_name = clean_name(user.full_name or user.first_name)
 
-    # ТАНҲО UID-и бозӣ санҷида мешавад (аккаунти Telegram лимит надорад)
     if not admin_flag and not vip_flag:
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
@@ -550,8 +548,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ **Лутфан UID-и мушаххасро нависед!**\n"
-            "Лимити гурӯҳ пок нашуд.\n\n"
+            "⚠️ **Лутфан UID-и мушаххасро нависед!**\n\n"
             "📌 Намуна: `/reset 18778177236`",
             parse_mode="Markdown"
         )
@@ -568,8 +565,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if removed_uid is not None:
         await update.message.reply_text(
-            f"✅ **Лимит ТАНҲО барои UID `{target}` гирифта шуд!**\n"
-            "Дигар UID-ҳо дар лимит мемонанд.",
+            f"✅ **Лимит ТАНҲО барои UID `{target}` гирифта шуд!**",
             parse_mode="Markdown"
         )
     else:
@@ -644,7 +640,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✅ **ЛИМИТ НЕСТ (ОЗОД АСТ)!**\n"
             "━━━━━━━━━━━\n"
             f"🆔 **UID:** `{target}`\n"
-            "🚀 Ба ин аккаунт метавонед ҳамин ҳозир `/like` занед.",
+            "🚀 Ба ин аккаунт метавонед ҳамин ҳозир `/like` занад.",
             parse_mode="Markdown"
         )
 
@@ -685,7 +681,7 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "✅ <b>ҲАМАИ UID-ҲО ОЗОДАНД!</b>\n"
             "━━━━━━━━━━━\n"
-            "Айни ҳол ягон ID-и бозӣ дар лимити 24-соата нест. Ҳама метавонанд <code>/like</code> зананд!",
+            "Айни ҳол ягон ID-и бозӣ дар лимити 24-соата нест.",
             parse_mode="HTML"
         )
         return
@@ -734,9 +730,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2 or not context.args[0].isdigit() or not context.args[1].isdigit():
         await update.message.reply_text(
             "⚠️ **ТАРЗИ ИСТИФОДАБАРӢ:**\n"
-            "`/addvip <UID> <рӯз>`\n\n"
-            "📌 Намуна (барои 10 рӯз):\n"
-            "`/addvip 18778177236 10`",
+            "`/addvip <UID> <рӯз>`",
             parse_mode="Markdown"
         )
         return
@@ -753,11 +747,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await save_state()
 
     await update.message.reply_text(
-        "💎 **VIP БОМУВАФФАҚИЯТ ФАЪОЛ ШУД!**\n"
-        "━━━━━━━━━━━\n"
-        f"🆔 **UID:** `{uid}`\n"
-        f"⏳ **Мӯҳлат:** `{days} рӯз`\n"
-        "✅ Акнун ин муштарӣ метавонад `/like <UID>`, `/like 200 <UID>` ё `/like 400 <UID>` занад!",
+        f"💎 **VIP барои UID `{uid}` ба муҳлати `{days} рӯз` фаъол шуд!**",
         parse_mode="Markdown"
     )
 
@@ -776,7 +766,7 @@ async def delvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await save_state()
 
     if removed:
-        await update.message.reply_text(f"🗑 UID `{uid}` аз рӯйхати VIP хориҷ карда шуд.", parse_mode="Markdown")
+        await update.message.reply_text(f"🗑 UID `{uid}` аз рӯйхати VIP хориҷ шуд.", parse_mode="Markdown")
     else:
         await update.message.reply_text(f"ℹ️ UID `{uid}` дар рӯйхати VIP набуд.", parse_mode="Markdown")
 
