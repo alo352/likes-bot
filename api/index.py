@@ -20,7 +20,7 @@ BASE_API_URL = "https://fflikes.ucbot.net"
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
 ADMIN_IDS = [6410886684]
-ALLOWED_GROUPS = [-1004354930364]
+ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400  # 24 соат
 DEFAULT_LIKES_AMOUNT = 200  # Ҳоло бо нобаёнӣ 200 лайк меравад!
