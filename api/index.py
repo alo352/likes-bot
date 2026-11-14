@@ -111,7 +111,7 @@ def format_hms(seconds_left: float) -> str:
     hours = total_sec // 3600
     minutes = (total_sec % 3600) // 60
     seconds = total_sec % 60
-    return f"{hours:02d}с : {minutes:02d}д : {seconds:02d}сон"
+    return f"{hours:02d}ҷ : {minutes:02d}м : {seconds:02d}сон"
 
 
 def clean_name(name: str) -> str:
@@ -354,10 +354,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=DEVELOPER_KEYBOARD
             )
             return
-    else:
-        if amount not in (100, 200, 300, 400, 500, 600, 700):
-            await update.message.reply_text("❌ Миқдори лайк бояд 100, 200, 400 ё 700 бошад.", parse_mode="Markdown")
-            return
 
     now = time.time()
     tg_full_name = clean_name(user.full_name or user.first_name)
@@ -406,14 +402,25 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if res["total_added"] <= 0:
             err_msg = res["error"]
             if not admin_flag and not vip_flag:
-                memory_uids.pop(uid, None)
+                # Агар сервер гӯяд, ки лимит пур аст, вақти кушодашавиро пурра 24 соат мемонем
+                memory_uids[uid] = {
+                    "time": now,
+                    "user_id": str(user.id),
+                    "name": tg_full_name
+                }
                 db_cache["uids"] = memory_uids
                 await save_state()
 
+            rem_hms = format_hms(COOLDOWN_TIME)
             await progress.edit_text(
-                "❌ **Лимити рӯзонаи ин UID пур аст ё хатогӣ рух дод!**\n"
-                f"📝 *Сабаб:* `{err_msg}`",
-                parse_mode="Markdown",
+                "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ!</b>\n"
+                "━━━━━━━━━━━\n"
+                f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+                f"🚫 <i>Ин аккаунт аллакай дар сервер лайк гирифтааст.</i>\n\n"
+                f"⏳ <b>Боқимонда то кушодашавӣ:</b>\n"
+                f"👉 <code>{rem_hms}</code>"
+                f"{VIP_PROMO_FOOTER}",
+                parse_mode="HTML",
                 reply_markup=DEVELOPER_KEYBOARD
             )
             return
@@ -507,7 +514,6 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = context.args[0].strip()
     await load_state()
     now = time.time()
-    tj_tz = timezone(timedelta(hours=5))
 
     if is_vip_uid(target):
         await update.message.reply_text(f"💎 UID `{target}` VIP аст!", parse_mode="Markdown")
