@@ -22,7 +22,7 @@ BASE_API_URL = "https://fflikes.ucbot.net"
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
 ADMIN_IDS = [6410886684]
-ALLOWED_GROUPS = [-1004354930364]
+ALLOWED_GROUPS = [-1004354930364]  # Танҳо гурӯҳҳои расмии шумо
 
 COOLDOWN_TIME = 86400  # 24 соат
 DEFAULT_LIKES_AMOUNT = 100
@@ -50,9 +50,7 @@ ACCESS_DENIED_TEXT = (
     "🔒 *Ин бот танҳо дар гурӯҳҳои расмии мо ва барои мизоҷони VIP фаъол аст.*\n\n"
     "✨ **Мехоҳед ба ботамон дастрасӣ ё Ключи шахсӣ гиред?**\n"
     "📩 Ҳозир ба админ муроҷиат кунед:\n"
-    "👉 **@parnetka**\n"
-    "━━━━━━━━━━━\n"
-    "⚡ *Хизматрасонии зуд ва боэътимод!*"
+    "👉 **@parnetka**"
 )
 
 
@@ -163,13 +161,42 @@ async def fetch_player_level(uid: str) -> str:
     return "N/A"
 
 
-async def check_group_access(update: Update, is_vip: bool = False) -> bool:
+async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
     user = update.effective_user
     if not chat:
         return False
     if is_admin_user(user) or is_vip:
         return True
+    
+    # Агар бот дар гурӯҳи нодуруст/бегона истифода шавад
+    if chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS:
+        # Хабар додан ба админ (Парнетка) дар шахсӣ
+        try:
+            user_mention = f"<a href='tg://user?id={user.id}'>{escape_html(user.full_name or 'Номаълум')}</a>"
+            chat_title = escape_html(chat.title or "Номаълум")
+            chat_username = f" (@{chat.username})" if chat.username else f" (ID: `{chat.id}`)"
+            
+            alert_text = (
+                f"🚨 <b>ҲУШДОР АМНИЯТӢ!</b>\n"
+                f"━━━━━━━━━━━\n"
+                f"👤 <b>Корбар:</b> {user_mention}\n"
+                f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
+                f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{chat_username}\n"
+                f"⚡ <i>Кӯшиш кард боти шуморо дар ин гурӯҳ истифода барад!</i>"
+            )
+            
+            for admin_id in ADMIN_IDS:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=alert_text,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            logging.error(f"Security alert error: {e}")
+
+        return False
+
     if chat.type == "private":
         if update.message:
             await update.message.reply_text(
@@ -178,6 +205,7 @@ async def check_group_access(update: Update, is_vip: bool = False) -> bool:
                 reply_markup=DEVELOPER_KEYBOARD
             )
         return False
+
     return chat.id in ALLOWED_GROUPS
 
 
@@ -307,6 +335,14 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int):
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
 
+    vip_flag = False
+    if context.args and len(context.args) >= 1:
+        check_uid = context.args[-1].strip()
+        vip_flag = is_vip_uid(check_uid)
+
+    if not await check_group_access(update, context, is_vip=vip_flag):
+        return
+
     if len(context.args) == 1:
         amount_str = str(DEFAULT_LIKES_AMOUNT)
         uid = context.args[0].strip()
@@ -314,22 +350,17 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_str = context.args[0].strip()
         uid = context.args[1].strip()
     else:
-        if not await check_group_access(update):
-            return
         await update.message.reply_text(
             "⚠️ <b>ТАРЗИ ИСТИФОДАБАРӢ</b>\n"
             "━━━━━━━━━━━\n"
             "👉 <code>/like {UID}</code> ё <code>/like 100 {UID}</code>\n"
-            "📌 Намуна: <code>/like 18778177236</code>"
-            f"{VIP_PROMO_FOOTER}",
+            "📌 Намуна: <code>/like 18778177236</code>",
             parse_mode="HTML",
             reply_markup=DEVELOPER_KEYBOARD
         )
         return
 
     if not amount_str.isdigit() or not uid.isdigit() or not (8 <= len(uid) <= 12):
-        if not await check_group_access(update):
-            return
         await update.message.reply_text(
             "❌ **ФОРМАТИ ХАТО!**\n"
             "📌 `/like 18778177236`",
@@ -338,12 +369,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     amount = int(amount_str)
-    vip_flag = is_vip_uid(uid)
     user = update.effective_user
     admin_flag = is_admin_user(user)
-
-    if not await check_group_access(update, is_vip=vip_flag):
-        return
 
     if not admin_flag and not vip_flag:
         if amount != 100:
@@ -402,7 +429,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if res["total_added"] <= 0:
             err_msg = res["error"]
             if not admin_flag and not vip_flag:
-                # Агар сервер гӯяд, ки лимит пур аст, вақти кушодашавиро пурра 24 соат мемонем
                 memory_uids[uid] = {
                     "time": now,
                     "user_id": str(user.id),
