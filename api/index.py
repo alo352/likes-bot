@@ -23,7 +23,8 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400  # 24 соат
-DEFAULT_LIKES_AMOUNT = 100  # Бо нобаёнӣ 100 лайк меравад
+DEFAULT_LIKES_AMOUNT = 100  # Барои корбарони оддӣ 100 лайк
+ADMIN_DEFAULT_LIKES = 200   # Барои Админ ба таври автоматӣ 200 лайк
 MAX_UIDS_PER_USER = 1  # Ҳар як аккаунти Telegram дар 24 соат танҳо ба 1 UID лайк зада метавонад
 
 db_cache = {
@@ -174,7 +175,6 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = result.from_user
     new_status = result.new_chat_member.status
 
-    # 1. Агар касе (ғайр аз Админ) ботро ба гурӯҳи бегона илова ё АДМИН кунад — ФАВРАН МЕБАРОЯД!
     if new_status in ["member", "administrator"]:
         if chat.id not in ALLOWED_GROUPS and not is_admin_user(user):
             try:
@@ -209,7 +209,6 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Unauthorized add alert error: {e}")
         return
 
-    # 2. Агар ботро аз гурӯҳ бароранд
     if new_status in ["left", "kicked"]:
         try:
             user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
@@ -392,21 +391,29 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     }
 
 
-async def run_kinematic_animation(progress_msg, uid: str, amount: int):
+async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
+    vip_header = "💎 <b>VIP AUTOLIKE ФАЪОЛ</b>\n" if vip_flag else ""
     frames = [
-        ("⚡ **Пайвастшавӣ ба сервери FF...**", "██░░░░░░░░", "18%"),
-        ("🔍 **Ҷустуҷӯи аккаунти бозингар...**", "████░░░░░░", "44%"),
-        (f"🚀 **Омодасозии {amount} лайк...**", "███████░░░", "71%"),
-        ("🔥 **Фиристодани лайкҳо ба UID...**", "█████████░", "93%"),
+        ("⚡ <b>Пайвастшавӣ ба сервери FF...</b>", "▰▱▱▱▱▱▱▱▱▱", "17%", "🔄 <i>Тафтиши дастрасӣ...</i>"),
+        ("🔍 <b>Ҷустуҷӯи аккаунти бозингар...</b>", "▰▰▰▱▱▱▱▱▱▱", "34%", "📡 <i>Дарёфти маълумоти UID...</i>"),
+        (f"⚙️ <b>Омодасозии {amount} лайк...</b>", "▰▰▰▰▰▱▱▱▱▱", "52%", "📦 <i>Танзими бастаи лайкҳо...</i>"),
+        ("🚀 <b>Фиристодани лайкҳо ба сервер...</b>", "▰▰▰▰▰▰▰▱▱▱", "71%", "🔥 <i>Раванди интиқол оғоз шуд...</i>"),
+        ("❤️‍🔥 <b>Воридшавии лайкҳо ба аккаунт...</b>", "▰▰▰▰▰▰▰▰▰▱", "89%", "✨ <i>Тасдиқи натиҷаҳо...</i>"),
+        ("✅ <b>Анҷом ёфт! Омодасозии чек...</b>", "▰▰▰▰▰▰▰▰▰▰", "100%", "🎉 <i>Ҳамаи лайкҳо фиристода шуданд!</i>"),
     ]
-    for title, bar, pct in frames:
-        await asyncio.sleep(0.8)
+    for title, bar, pct, sub_status in frames:
+        await asyncio.sleep(0.9)
         try:
             await progress_msg.edit_text(
+                f"{vip_header}"
+                f"🔥 <b>PARNETKA SYSTEM</b>\n"
+                f"<blockquote>"
                 f"{title}\n"
-                f"🆔 **UID:** `{uid}`\n"
-                f"`[{bar}]` **{pct}**",
-                parse_mode="Markdown"
+                f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+                f"📊 <b>Ҳолат:</b> <code>[{bar}]</code> <b>{pct}</b>\n"
+                f"{sub_status}"
+                f"</blockquote>",
+                parse_mode="HTML"
             )
         except Exception:
             pass
@@ -414,6 +421,9 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int):
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
+
+    user = update.effective_user
+    admin_flag = is_admin_user(user)
 
     vip_flag = False
     if context.args and len(context.args) >= 1:
@@ -424,7 +434,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) == 1:
-        amount_str = str(DEFAULT_LIKES_AMOUNT)
+        # Танҳо Админ ба таври автоматӣ 200 лайк мегирад, дигарон 100 лайк
+        amount_str = str(ADMIN_DEFAULT_LIKES if admin_flag else DEFAULT_LIKES_AMOUNT)
         uid = context.args[0].strip()
     elif len(context.args) == 2:
         amount_str = context.args[0].strip()
@@ -449,8 +460,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     amount = int(amount_str)
-    user = update.effective_user
-    admin_flag = is_admin_user(user)
     tg_user_id = str(user.id)
 
     # Қулфи зидди пахши чандкарата дар як вақт (Anti-Spam)
@@ -459,7 +468,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if lock_key_user in active_requests or lock_key_uid in active_requests:
         return
 
-    if not admin_flag and not vip_flag:
+    # Ҳамаи корбарон (ғайр аз Админ) ТАНҲО 100 лайк зада метавонанд
+    if not admin_flag:
         if amount != DEFAULT_LIKES_AMOUNT:
             await update.message.reply_text(
                 f"⚠️ <b>ТАНҲО {DEFAULT_LIKES_AMOUNT} ЛАЙК ДАСТРАС АСТ!</b>\n"
@@ -476,7 +486,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши лимити UID-и бозӣ (агар бо аккаунти дигари ТГ низ занад, медорад)
+        # 1. Санҷиши лимити UID-и бозӣ
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -495,7 +505,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # 2. Санҷиши лимити аккаунти Telegram (агар бо ҳамон ТГ ба UID-и дигар занад, медорад)
+        # 2. Санҷиши лимити аккаунти Telegram
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
@@ -538,17 +548,21 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        vip_badge = "💎 **VIP AUTOLIKE ФАЪОЛ**\n" if vip_flag else ""
+        vip_header = "💎 <b>VIP AUTOLIKE ФАЪОЛ</b>\n" if vip_flag else ""
         progress = await update.message.reply_text(
-            f"{vip_badge}"
-            f"⚡ **Оғози фиристодани {amount} лайк...**\n"
-            f"🆔 **UID:** `{uid}`\n"
-            "`[░░░░░░░░░░]` **1%**",
-            parse_mode="Markdown"
+            f"{vip_header}"
+            f"🔥 <b>PARNETKA SYSTEM</b>\n"
+            f"<blockquote>"
+            f"⚡ <b>Оғози системаи лайк...</b>\n"
+            f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+            f"📊 <b>Ҳолат:</b> <code>[▱▱▱▱▱▱▱▱▱▱]</code> <b>1%</b>\n"
+            f"⏳ <i>Лутфан чанд сония интизор шавед...</i>"
+            f"</blockquote>",
+            parse_mode="HTML"
         )
 
         api_task = asyncio.create_task(send_likes_batch(uid, amount))
-        await run_kinematic_animation(progress, uid, amount)
+        await run_kinematic_animation(progress, uid, amount, vip_flag)
         res = await api_task
 
         if res["total_added"] <= 0:
