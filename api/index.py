@@ -23,7 +23,7 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400  # 24 соат
-DEFAULT_LIKES_AMOUNT = 200  # Ҳоло бо нобаёнӣ 200 лайк меравад!
+DEFAULT_LIKES_AMOUNT = 100  # Бо нобаёнӣ 100 лайк меравад
 MAX_UIDS_PER_USER = 1  # Ҳар як аккаунти Telegram дар 24 соат танҳо ба 1 UID лайк зада метавонад
 
 db_cache = {
@@ -42,7 +42,7 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\n💎 <b>МЕХОҲЕД VIP LIKE ХАРЕД?</b>\n"
+    "\n\n💎 <b>МЕХОҲЕД 200+ VIP LIKE ХАРЕД?</b>\n"
     "⚡️ <i>Бе интизории 24 соат ва бо суръати баланд!</i>\n"
     "📩 <b>Ба админ муроҷиат кунед:</b> 👉 <b>@parnetka</b>"
 )
@@ -174,6 +174,42 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = result.from_user
     new_status = result.new_chat_member.status
 
+    # 1. Агар касе (ғайр аз Админ) ботро ба гурӯҳи бегона илова ё АДМИН кунад — ФАВРАН МЕБАРОЯД!
+    if new_status in ["member", "administrator"]:
+        if chat.id not in ALLOWED_GROUPS and not is_admin_user(user):
+            try:
+                await context.bot.leave_chat(chat.id)
+            except Exception as e:
+                logging.error(f"Leave unauthorized chat error: {e}")
+
+            try:
+                user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
+                user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
+                username_str = f" (@{user.username})" if user.username else ""
+                chat_title = escape_html(chat.title or "Гурӯҳ")
+                chat_username = f" (@{chat.username})" if chat.username else ""
+                role_uz = "АДМИН" if new_status == "administrator" else "АЪЗО"
+
+                alert_text = (
+                    f"🛡 <b>КӮШИШИ ИЛОВА/АДМИН КАРДАНИ БОТ БАСТА ШУД!</b>\n"
+                    f"━━━━━━━━━━━\n"
+                    f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{escape_html(chat_username)} (ID: <code>{chat.id}</code>)\n"
+                    f"👤 <b>Кӣ кард?:</b> {user_mention}{escape_html(username_str)}\n"
+                    f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
+                    f"🎭 <b>Нақш:</b> <code>{role_uz}</code>\n"
+                    f"🚪 <i>Бот худкор аз ин гурӯҳ баромад!</i>"
+                )
+                for admin_id in ADMIN_IDS:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=alert_text,
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                logging.error(f"Unauthorized add alert error: {e}")
+        return
+
+    # 2. Агар ботро аз гурӯҳ бароранд
     if new_status in ["left", "kicked"]:
         try:
             user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
@@ -210,6 +246,11 @@ async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     if chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS:
         try:
+            await context.bot.leave_chat(chat.id)
+        except Exception:
+            pass
+
+        try:
             user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
             user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
             username_str = f" (@{user.username})" if user.username else ""
@@ -222,7 +263,7 @@ async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 f"👤 <b>Ном:</b> {user_mention}{escape_html(username_str)}\n"
                 f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
                 f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{chat_username}\n"
-                f"⚡ <i>Кӯшиш кард боти шуморо дар ин гурӯҳ истифода барад!</i>"
+                f"⚡ <i>Кӯшиш кард боти шуморо дар ин гурӯҳ истифода барад! Бот аз гурӯҳ баромад.</i>"
             )
 
             for admin_id in ADMIN_IDS:
@@ -435,7 +476,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши лимити UID-и бозӣ
+        # 1. Санҷиши лимити UID-и бозӣ (агар бо аккаунти дигари ТГ низ занад, медорад)
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -454,7 +495,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # 2. Санҷиши лимити аккаунти Telegram
+        # 2. Санҷиши лимити аккаунти Telegram (агар бо ҳамон ТГ ба UID-и дигар занад, медорад)
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
