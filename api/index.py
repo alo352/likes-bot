@@ -42,13 +42,9 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 ACCESS_DENIED_TEXT = (
-    "DASTRASI MAHDUD AST!
-"
-    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.
-
-"
-    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?
-"
+    "DASTRASI MAHDUD AST!\n"
+    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.\n\n"
+    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?\n"
     "Ba admin murojiat kuned: @parnetka"
 )
 
@@ -176,10 +172,8 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 username_str = f" (@{user.username})" if user.username else ""
                 chat_title = escape_html(chat.title or "Guruh")
                 alert_text = (
-                    f"BOT AZ GURUH BAROVARDA SHUD!
-"
-                    f"Guruh: {chat_title} (ID: {chat.id})
-"
+                    f"BOT AZ GURUH BAROVARDA SHUD!\n"
+                    f"Guruh: {chat_title} (ID: {chat.id})\n"
                     f"Kard: {user_mention}{username_str}"
                 )
                 for admin_id in ADMIN_IDS:
@@ -255,7 +249,7 @@ async def add_autolike_id(uid: str) -> dict:
                 d2 = data_as.get("data", data_as)
                 nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
             else:
-                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "XÑÐ¾Ð³Ó£ Ð´Ð°Ñ Ð¸Ð»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ ID."
+                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Хатогӣ дар илова кардани ID."
                 last_error = str(msg_err)
         except asyncio.TimeoutError:
             last_error = "Vaqti intizorii server tamom shud."
@@ -312,7 +306,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elapsed_uid = now - uid_time
             if elapsed_uid < COOLDOWN_TIME:
                 rem_hms = format_hms(COOLDOWN_TIME - elapsed_uid)
-                await update.message.reply_text(f"In akkaunt imruz Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹Ðº Ò³Ð°Ð¼ÑÐ¾Ò³ ÑÑÐ´Ð°Ð°ÑÑ! Boqimonda: {rem_hms}")
+                await update.message.reply_text(f"In akkaunt imruz ба авто-лайк ҳамроҳ шудааст! Boqimonda: {rem_hms}")
                 return
 
         if tg_user_id not in user_history:
@@ -342,7 +336,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        progress = await update.message.reply_text(f"ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ UID {uid} Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹ÐºÐ¸ ÑÓ¯Ð·Ð¾Ð½Ð°...")
+        progress = await update.message.reply_text(f"Илова кардани UID {uid} ба авто-лайки рӯзона...")
 
         res = await add_autolike_id(uid)
 
@@ -357,7 +351,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = res.get("error") or "ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð° Ð½Ð°ÑÑÐ´."
+            err_reason = res.get("error") or "Илова карда нашуд."
             await progress.edit_text(f"Xato: {err_reason}")
             return
 
@@ -367,19 +361,12 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         likes_hozira = p_info["likes"]
 
         caption = (
-            f"â UID Ø¨Ø§ Ð¼ÑÐ²Ð°ÑÑÐ°ÒÐ¸ÑÑ Ð±Ð° ÐÐ²ÑÐ¾-ÐÐ°Ð¹Ðº Ð¸Ð»Ð¾Ð²Ð° ÑÑÐ´!
-
-"
-            f"ð¤ ÐÐ¾Ð¼: {nickname}
-"
-            f"â­ Level: {player_level}
-"
-            f"ð UID: {uid}
-"
-            f"â¤ï¸ ÐÐ°Ð¹ÐºÒ³Ð¾Ð¸ Ò³Ð¾Ð·Ð¸ÑÐ°: {likes_hozira}
-
-"
-            f"â¹ï¸ ÐÐºÐ½ÑÐ½ Ð¸Ð½ Ð°ÐºÐºÐ°ÑÐ½Ñ Ò³Ð°Ñ ÑÓ¯Ð· Ð±Ð° ÑÐ°Ð²ÑÐ¸ ÑÑÐ´ÐºÐ¾Ñ Ð»Ð°Ð¹Ðº Ð¼ÐµÐ³Ð¸ÑÐ°Ð´!"
+            f"✅ UID با муваффақият ба Авто-Лайк илова шуд!\n\n"
+            f"👤 Ном: {nickname}\n"
+            f"⭐ Level: {player_level}\n"
+            f"🆔 UID: {uid}\n"
+            f"❤️ Лайкҳои ҳозира: {likes_hozira}\n\n"
+            f"ℹ️ Акнун ин аккаунт ҳар рӯз ба таври худкор лайк мегирад!"
         )
 
         like_gif_id = db_cache.get("like_gif_id", "")
@@ -395,7 +382,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"/like error: {e}")
         try:
-            await progress.edit_text("Ð¥Ð°ÑÐ¾Ð³Ð¸Ð¸ ÑÐµÑÐ²ÐµÑ!")
+            await progress.edit_text("Хатогии сервер!")
         except Exception:
             pass
     finally:
@@ -434,14 +421,10 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = context.args[0].strip()
     p_info = await fetch_player_info(uid)
     await update.message.reply_text(
-        f"MA'LUMOTI AKKAUNT
-"
-        f"Nom: {p_info['nickname']}
-"
-        f"UID: {uid}
-"
-        f"Level: {p_info['level']}
-"
+        f"MA'LUMOTI AKKAUNT\n"
+        f"Nom: {p_info['nickname']}\n"
+        f"UID: {uid}\n"
+        f"Level: {p_info['level']}\n"
         f"Like-hoi hozira: {p_info['likes']}"
     )
 
@@ -452,8 +435,7 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp:
             raw_bytes = await resp.read()
             raw = raw_bytes.decode('utf-8', errors='ignore')
-    await update.message.reply_text(f"ROYXATI AUTOLIKE DAR SERVER:
-{raw[:400]}")
+    await update.message.reply_text(f"ROYXATI AUTOLIKE DAR SERVER:\n{raw[:400]}")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -517,8 +499,7 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, (unlock_ts, uid) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
         lines.append(f"{idx}. UID: {uid} | Boqimonda: {rem_hms}")
-    await update.message.reply_text("
-".join(lines))
+    await update.message.reply_text("\n".join(lines))
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -557,16 +538,14 @@ async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = []
     for uid, exp in list(db_cache["vips"].items()):
         if float(exp) > now:
-            active.append(f"UID: {uid} â boqimonda: {format_remaining(float(exp) - now)}")
+            active.append(f"UID: {uid} — boqimonda: {format_remaining(float(exp) - now)}")
         else:
             db_cache["vips"].pop(uid)
     await save_state()
     if not active:
         await update.message.reply_text("VIP nest.")
         return
-    await update.message.reply_text("VIP-MUSHTARIYON:
-" + "
-".join(active))
+    await update.message.reply_text("VIP-MUSHTARIYON:\n" + "\n".join(active))
 
 app = FastAPI()
 
