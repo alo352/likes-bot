@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import time
 import json
@@ -15,10 +16,8 @@ logging.basicConfig(
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
-
 AUTOSYSTEM_KEY = os.getenv("AUTOSYSTEM_KEY", "AUTOSYSTEM_a00dc13872dfc8c417f658cd9d29ffd6d1d0")
 AUTOSYSTEM_URL = "https://autolikesystem.com.br/v1"
-
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
 ADMIN_IDS = [6410886684]
@@ -36,26 +35,23 @@ db_cache = {
     "like_gif_id": ""
 }
 ptb_application = None
-
 active_requests = set()
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("ð¨âð» ÐÐÐÐÐ / Ð¥ÐÐ ÐÐÐ VIP", url="https://t.me/parnetka")]
+    [InlineKeyboardButton("ADMIN / VIP", url="https://t.me/parnetka")]
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\nð <b>ÐÐÐ¥ÐÒ²ÐÐ 200+ VIP LIKE Ð¥ÐÐ ÐÐ?</b>\n"
-    "â¡ï¸ <i>ÐÐµ Ð¸Ð½ÑÐ¸Ð·Ð¾ÑÐ¸Ð¸ 24 ÑÐ¾Ð°Ñ Ð²Ð° Ð±Ð¾ ÑÑÑÑÐ°ÑÐ¸ Ð±Ð°Ð»Ð°Ð½Ð´!</i>\n"
-    "ð© <b>ÐÐ° Ð°Ð´Ð¼Ð¸Ð½ Ð¼ÑÑÐ¾Ò·Ð¸Ð°Ñ ÐºÑÐ½ÐµÐ´:</b> ð <b>@parnetka</b>"
+    "\n\n200+ VIP LIKE XARED?\n"
+    "Be intizorii 24 soat va bo surati baland!\n"
+    "Ba admin murojiat kuned: @parnetka"
 )
 
 ACCESS_DENIED_TEXT = (
-    "ð« **ÐÐÐ¡Ð¢Ð ÐÐ¡Ó¢ ÐÐÒ²ÐÐ£Ð ÐÐ¡Ð¢!**\n"
-    "âââââââââââ\n"
-    "ð *ÐÐ½ Ð±Ð¾Ñ ÑÐ°Ð½Ò³Ð¾ Ð´Ð°Ñ Ð³ÑÑÓ¯Ò³Ò³Ð¾Ð¸ ÑÐ°ÑÐ¼Ð¸Ð¸ Ð¼Ð¾ Ð²Ð° Ð±Ð°ÑÐ¾Ð¸ Ð¼Ð¸Ð·Ð¾Ò·Ð¾Ð½Ð¸ VIP ÑÐ°ÑÐ¾Ð» Ð°ÑÑ.*\n\n"
-    "â¨ **ÐÐµÑÐ¾Ò³ÐµÐ´ Ð±Ð° Ð±Ð¾ÑÐ°Ð¼Ð¾Ð½ Ð´Ð°ÑÑÑÐ°ÑÓ£ Ñ ÐÐ»ÑÑÐ¸ ÑÐ°ÑÑÓ£ Ð³Ð¸ÑÐµÐ´?**\n"
-    "ð© Ò²Ð¾Ð·Ð¸Ñ Ð±Ð° Ð°Ð´Ð¼Ð¸Ð½ Ð¼ÑÑÐ¾Ò·Ð¸Ð°Ñ ÐºÑÐ½ÐµÐ´:\n"
-    "ð **@parnetka**"
+    "DASTRASI MAHDUD AST!\n"
+    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.\n\n"
+    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?\n"
+    "Ba admin murojiat kuned: @parnetka"
 )
 
 async def load_state():
@@ -98,23 +94,23 @@ def format_remaining(seconds_left: float) -> str:
     minutes = (total_sec % 3600) // 60
     seconds = total_sec % 60
     if days > 0:
-        return f"{days} ÑÓ¯Ð·Ñ {hours} ÑÐ¾Ð°ÑÑ {minutes} Ð´Ð°ÒÐ¸ÒÐ°"
+        return f"{days} ruzu {hours} soatu {minutes} daqiqah"
     if hours > 0:
-        return f"{hours} ÑÐ¾Ð°Ñ, {minutes} Ð´Ð°ÒÐ¸ÒÐ°, {seconds} ÑÐ¾Ð½Ð¸Ñ"
+        return f"{hours} soat, {minutes} daqiqah, {seconds} soniya"
     if minutes > 0:
-        return f"{minutes} Ð´Ð°ÒÐ¸ÒÐ°, {seconds} ÑÐ¾Ð½Ð¸Ñ"
-    return f"{seconds} ÑÐ¾Ð½Ð¸Ñ"
+        return f"{minutes} daqiqah, {seconds} soniya"
+    return f"{seconds} soniya"
 
 def format_hms(seconds_left: float) -> str:
     total_sec = max(0, int(seconds_left))
     hours = total_sec // 3600
     minutes = (total_sec % 3600) // 60
     seconds = total_sec % 60
-    return f"{hours:02d}Ò· : {minutes:02d}Ð¼ : {seconds:02d}ÑÐ¾Ð½"
+    return f"{hours:02d}soat : {minutes:02d}min : {seconds:02d}son"
 
 def clean_name(name: str) -> str:
     if not name:
-        return "ÐÐ¾ÑÐ±Ð°Ñ"
+        return "Korbar"
     return name.replace("`", "").replace("*", "").replace("_", "")
 
 def escape_html(text: str) -> str:
@@ -177,44 +173,19 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Leave unauthorized chat error: {e}")
             try:
-                user_full_name = escape_html(user.full_name or user.first_name or "ÐÐ¾Ð¼Ð°ÑÐ»ÑÐ¼")
+                user_full_name = escape_html(user.full_name or user.first_name or "Nomalum")
                 user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
                 username_str = f" (@{user.username})" if user.username else ""
-                chat_title = escape_html(chat.title or "ÐÑÑÓ¯Ò³")
-                chat_username = f" (@{chat.username})" if chat.username else ""
-                role_uz = "ÐÐÐÐÐ" if new_status == "administrator" else "ÐÐªÐÐ"
+                chat_title = escape_html(chat.title or "Guruh")
                 alert_text = (
-                    f"ð¡ <b>ÐÓ®Ð¨ÐÐ¨Ð ÐÐÐÐÐ/ÐÐÐÐÐ ÐÐÐ ÐÐÐÐ ÐÐÐ¢ ÐÐÐ¡Ð¢Ð Ð¨Ð£Ð!</b>\n"
-                    f"âââââââââââ\n"
-                    f"ð¢ <b>ÐÑÑÓ¯Ò³:</b> <b>{chat_title}</b>{escape_html(chat_username)} (ID: <code>{chat.id}</code>)\n"
-                    f"ð¤ <b>ÐÓ£ ÐºÐ°ÑÐ´?:</b> {user_mention}{escape_html(username_str)}\n"
-                    f"ð <b>TG ID:</b> <code>{user.id}</code>\n"
-                    f"ð­ <b>ÐÐ°ÒÑ:</b> <code>{role_uz}</code>\n"
-                    f"ðª <i>ÐÐ¾Ñ ÑÑÐ´ÐºÐ¾Ñ Ð°Ð· Ð¸Ð½ Ð³ÑÑÓ¯Ò³ Ð±Ð°ÑÐ¾Ð¼Ð°Ð´!</i>"
+                    f"BOT AZ GURUH BAROVARDA SHUD!\n"
+                    f"Guruh: {chat_title} (ID: {chat.id})\n"
+                    f"Kard: {user_mention}{username_str}"
                 )
                 for admin_id in ADMIN_IDS:
                     await context.bot.send_message(chat_id=admin_id, text=alert_text, parse_mode="HTML")
             except Exception as e:
-                logging.error(f"Unauthorized add alert error: {e}")
-        return
-    if new_status in ["left", "kicked"]:
-        try:
-            user_full_name = escape_html(user.full_name or user.first_name or "ÐÐ¾Ð¼Ð°ÑÐ»ÑÐ¼")
-            user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
-            username_str = f" (@{user.username})" if user.username else ""
-            chat_title = escape_html(chat.title or "ÐÑÑÓ¯Ò³")
-            alert_text = (
-                f"ð <b>ÐÐÐ¢ ÐÐ ÐÐ£Ð Ð£Ò² ÐÐÐ ÐÐÐÐ ÐÐ Ð¨Ð£Ð!</b>\n"
-                f"âââââââââââ\n"
-                f"ð¢ <b>ÐÑÑÓ¯Ò³:</b> <b>{chat_title}</b> (ID: <code>{chat.id}</code>)\n"
-                f"ð¤ <b>ÐÓ£ Ð±Ð°ÑÐ¾Ð²Ð°ÑÐ´?:</b> {user_mention}{escape_html(username_str)}\n"
-                f"ð <b>TG ID:</b> <code>{user.id}</code>\n"
-                f"â ï¸ <i>ÐÐ¾Ñ Ð±Ð¾ Ð¼ÑÐ²Ð°ÑÑÐ°ÒÐ¸ÑÑ Ð°Ð· Ð¸Ð½ Ð³ÑÑÓ¯Ò³ Ð²Ð° Ð°Ð· Ð¸Ð½ Ð°ÐºÐºÐ°ÑÐ½Ñ ÑÐ¾ÑÐ¸Ò· ÐºÐ°ÑÐ´Ð° ÑÑÐ´!</i>"
-            )
-            for admin_id in ADMIN_IDS:
-                await context.bot.send_message(chat_id=admin_id, text=alert_text, parse_mode="HTML")
-        except Exception as e:
-            logging.error(f"Bot removal tracking error: {e}")
+                logging.error(f"Alert error: {e}")
 
 async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
@@ -228,28 +199,10 @@ async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await context.bot.leave_chat(chat.id)
         except Exception:
             pass
-        try:
-            user_full_name = escape_html(user.full_name or user.first_name or "ÐÐ¾Ð¼Ð°ÑÐ»ÑÐ¼")
-            user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
-            username_str = f" (@{user.username})" if user.username else ""
-            chat_title = escape_html(chat.title or "ÐÐ¾Ð¼Ð°ÑÐ»ÑÐ¼")
-            chat_username = f" (@{chat.username})" if chat.username else f" (ID: <code>{chat.id}</code>)"
-            alert_text = (
-                f"ð¨ <b>Ò²Ð£Ð¨ÐÐÐ  ÐÐÐÐÐ¯Ð¢Ó¢!</b>\n"
-                f"âââââââââââ\n"
-                f"ð¤ <b>ÐÐ¾Ð¼:</b> {user_mention}{escape_html(username_str)}\n"
-                f"ð <b>TG ID:</b> <code>{user.id}</code>\n"
-                f"ð¢ <b>ÐÑÑÓ¯Ò³:</b> <b>{chat_title}</b>{chat_username}\n"
-                f"â¡ <i>ÐÓ¯ÑÐ¸Ñ ÐºÐ°ÑÐ´ Ð±Ð¾ÑÐ¸ ÑÑÐ¼Ð¾ÑÐ¾ Ð´Ð°Ñ Ð¸Ð½ Ð³ÑÑÓ¯Ò³ Ð¸ÑÑÐ¸ÑÐ¾Ð´Ð° Ð±Ð°ÑÐ°Ð´! ÐÐ¾Ñ Ð°Ð· Ð³ÑÑÓ¯Ò³ Ð±Ð°ÑÐ¾Ð¼Ð°Ð´.</i>"
-            )
-            for admin_id in ADMIN_IDS:
-                await context.bot.send_message(chat_id=admin_id, text=alert_text, parse_mode="HTML")
-        except Exception as e:
-            logging.error(f"Security alert error: {e}")
         return False
     if chat.type == "private":
         if update.message:
-            await update.message.reply_text(ACCESS_DENIED_TEXT, parse_mode="Markdown", reply_markup=DEVELOPER_KEYBOARD)
+            await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
         return False
     return chat.id in ALLOWED_GROUPS
 
@@ -263,7 +216,7 @@ async def handle_admin_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await load_state()
         db_cache["like_gif_id"] = update.message.animation.file_id
         await save_state()
-        await update.message.reply_text("â **GIF-Ð¸ Parnetka Likes Ð±Ð¾Ð¼ÑÐ²Ð°ÑÑÐ°ÒÐ¸ÑÑ Ð½Ð°ÑÐ± Ð²Ð° Ð´Ð°Ñ Firebase ÑÐ°Ð±Ñ ÑÑÐ´!**", parse_mode="Markdown")
+        await update.message.reply_text("GIF bomuvaffaqiyat nasb shud!")
 
 async def delgif_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global db_cache
@@ -272,7 +225,7 @@ async def delgif_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
     db_cache["like_gif_id"] = ""
     await save_state()
-    await update.message.reply_text("ð GIF Ð¿Ð¾Ðº ÐºÐ°ÑÐ´Ð° ÑÑÐ´.")
+    await update.message.reply_text("GIF pok karda shud.")
 
 async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -280,7 +233,7 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
     if is_admin_user(user):
         return
     if chat and chat.type == "private" and update.message:
-        await update.message.reply_text(ACCESS_DENIED_TEXT, parse_mode="Markdown", reply_markup=DEVELOPER_KEYBOARD)
+        await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
 
 async def send_likes_batch(uid: str, target_amount: int) -> dict:
     total_added = 0
@@ -300,7 +253,8 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
         try:
             timeout_cfg = aiohttp.ClientTimeout(total=95)
             async with session.get(url_as, timeout=timeout_cfg) as resp_as:
-                raw_as = await resp_as.text()
+                raw_bytes = await resp_as.read()
+                raw_as = raw_bytes.decode('utf-8', errors='ignore')
             data_as = json.loads(raw_as)
 
             if isinstance(data_as, dict) and data_as.get("sucesso") is True:
@@ -334,19 +288,14 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
                 if added_as > 0:
                     total_added = added_as
                 else:
-                    last_error = str(
-                        data_as.get("mensagem") or data_as.get("erro")
-                        or data_as.get("message") or "AutoLikeSystem: 0 Ð»Ð°Ð¹Ðº"
-                    )
+                    last_error = "Server band ast yo in UID imruz like giriftaast."
             else:
-                last_error = str(
-                    data_as.get("mensagem") or data_as.get("erro")
-                    or data_as.get("message") or raw_as[:150]
-                )
+                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Limiti ruzona pur ast."
+                last_error = str(msg_err)
         except asyncio.TimeoutError:
-            last_error = "AutoLikeSystem: Ð²Ð°ÒÑÐ¸ Ð¸Ð½ÑÐ¸Ð·Ð¾ÑÓ£ (95Ñ) ÑÐ°Ð¼Ð¾Ð¼ ÑÑÐ´"
+            last_error = "Vaqti intizorii server tamom shud."
         except Exception as e_as:
-            last_error = f"AutoLikeSystem: {e_as}"
+            last_error = f"Xato: {e_as}"
 
     return {
         "total_added": total_added,
@@ -359,27 +308,22 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     }
 
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
-    vip_header = "ð <b>VIP AUTOLIKE Ð¤ÐÐªÐÐ</b>\n" if vip_flag else ""
+    vip_header = "VIP AUTOLIKE FAOL\n" if vip_flag else ""
     frames = [
-        ("â¡ <b>ÐÐ°Ð¹Ð²Ð°ÑÑÑÐ°Ð²Ó£ Ð±Ð° AutoLikeSystem...</b>", "â°â±â±â±â±â±â±â±â±â±", "17%", "ð <i>Ð¢Ð°ÑÑÐ¸ÑÐ¸ Ð´Ð°ÑÑÑÐ°ÑÓ£ (CIS)...</i>"),
-        ("ð <b>Ò¶ÑÑÑÑÒ·Ó¯Ð¸ Ð°ÐºÐºÐ°ÑÐ½ÑÐ¸ Ð±Ð¾Ð·Ð¸Ð½Ð³Ð°Ñ...</b>", "â°â°â°â±â±â±â±â±â±â±", "34%", "ð¡ <i>ÐÐ°ÑÑÑÑÐ¸ Ð¼Ð°ÑÐ»ÑÐ¼Ð¾ÑÐ¸ UID...</i>"),
-        (f"âï¸ <b>ÐÐ¼Ð¾Ð´Ð°ÑÐ¾Ð·Ð¸Ð¸ {amount} Ð»Ð°Ð¹Ðº...</b>", "â°â°â°â°â°â±â±â±â±â±", "52%", "ð¦ <i>Ð¢Ð°Ð½Ð·Ð¸Ð¼Ð¸ Ð±Ð°ÑÑÐ°Ð¸ Ð»Ð°Ð¹ÐºÒ³Ð¾...</i>"),
-        ("ð <b>Ð¤Ð¸ÑÐ¸ÑÑÐ¾Ð´Ð°Ð½Ð¸ Ð»Ð°Ð¹ÐºÒ³Ð¾ Ð±Ð° ÑÐµÑÐ²ÐµÑ...</b>", "â°â°â°â°â°â°â°â±â±â±", "71%", "ð¥ <i>ÐÐ½ ÑÐ°Ð²Ð°Ð½Ð´ Ð¼ÐµÑÐ°Ð²Ð¾Ð½Ð°Ð´ ÑÐ¾ 60-90 ÑÐ¾Ð½Ð¸Ñ ÑÓ¯Ð» ÐºÐ°ÑÐ°Ð´...</i>"),
-        ("â¤ï¸âð¥ <b>ÐÐ¾ÑÐ¸Ð´ÑÐ°Ð²Ð¸Ð¸ Ð»Ð°Ð¹ÐºÒ³Ð¾ Ð±Ð° Ð°ÐºÐºÐ°ÑÐ½Ñ...</b>", "â°â°â°â°â°â°â°â°â°â±", "89%", "â¨ <i>Ð¡Ð°Ð½Ò·Ð¸ÑÐ¸ Ò³Ð¸ÑÐ¾Ð±ÐºÑÐ½Ð°ÐºÐ¸ Ð¿ÑÐ¾ÑÐ¸Ð»...</i>"),
+        ("Payvastshavi ba AutoLikeSystem...", "17%"),
+        ("Justujui akkanti bozinger...", "34%"),
+        (f"Omodasoziyi {amount} like...", "52%"),
+        (" Firistodani likeho ba server...", "71%"),
+        (" Voridshavi ba akkant...", "89%"),
     ]
-    for title, bar, pct, sub_status in frames:
+    for title, pct in frames:
         await asyncio.sleep(1.2)
         try:
             await progress_msg.edit_text(
                 f"{vip_header}"
-                f"ð¥ <b>PARNETKA SYSTEM</b>\n"
-                f"<blockquote>"
+                f"PARNETKA SYSTEM\n"
                 f"{title}\n"
-                f"ð <b>UID:</b> <code>{uid}</code>\n"
-                f"ð <b>Ò²Ð¾Ð»Ð°Ñ:</b> <code>[{bar}]</code> <b>{pct}</b>\n"
-                f"{sub_status}"
-                f"</blockquote>",
-                parse_mode="HTML"
+                f"UID: {uid} ({pct})"
             )
         except Exception:
             pass
@@ -404,22 +348,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_str = context.args[0].strip()
         uid = context.args[1].strip()
     else:
-        await update.message.reply_text(
-            "â ï¸ <b>Ð¢ÐÐ ÐÐ ÐÐ¡Ð¢ÐÐ¤ÐÐÐÐÐÐ Ó¢</b>\n"
-            "âââââââââââ\n"
-            f"ð <code>/like {{UID}}</code> Ñ <code>/like {DEFAULT_LIKES_AMOUNT} {{UID}}</code>\n"
-            "ð ÐÐ°Ð¼ÑÐ½Ð°: <code>/like 18778177236</code>",
-            parse_mode="HTML",
-            reply_markup=DEVELOPER_KEYBOARD
-        )
+        await update.message.reply_text("Tarzi istifoda: /like {UID}")
         return
 
     if not amount_str.isdigit() or not uid.isdigit() or not (8 <= len(uid) <= 12):
-        await update.message.reply_text(
-            "â **Ð¤ÐÐ ÐÐÐ¢Ð Ð¥ÐÐ¢Ð!**\n"
-            "ð `/like 18778177236`",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("Formati xato! Namuna: /like 18778177236")
         return
 
     amount = int(amount_str)
@@ -429,17 +362,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lock_key_uid = f"uid_{uid}"
     if lock_key_user in active_requests or lock_key_uid in active_requests:
         return
-
-    if not admin_flag:
-        if amount != DEFAULT_LIKES_AMOUNT:
-            await update.message.reply_text(
-                f"â ï¸ <b>Ð¢ÐÐÒ²Ð {DEFAULT_LIKES_AMOUNT} ÐÐÐÐ ÐÐÐ¡Ð¢Ð ÐÐ¡ ÐÐ¡Ð¢!</b>\n"
-                f"ð ÐÐ°Ð²Ð¸ÑÐµÐ´: <code>/like {uid}</code> Ñ <code>/like {DEFAULT_LIKES_AMOUNT} {uid}</code>"
-                f"{VIP_PROMO_FOOTER}",
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
-            )
-            return
 
     now = time.time()
     tg_full_name = clean_name(user.full_name or user.first_name)
@@ -453,16 +375,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elapsed_uid = now - uid_time
             if elapsed_uid < COOLDOWN_TIME:
                 rem_hms = format_hms(COOLDOWN_TIME - elapsed_uid)
-                await update.message.reply_text(
-                    "â ï¸ <b>ÐÐ ÐÐÐÐ£ÐÐ¢ ÐÐÐ Ó®Ð ÐÐÐÐ ÐÐÐ ÐÐ¤Ð¢ÐÐÐ¡Ð¢!</b>\n"
-                    "âââââââââââ\n"
-                    f"ð <b>UID:</b> <code>{uid}</code>\n"
-                    f"â³ <b>ÐÐ¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð°:</b> <code>{rem_hms}</code>\n\n"
-                    "ð« <i>ÐÐ° Ð¸Ð½ UID Ð´Ð°Ñ 24 ÑÐ¾Ð°ÑÐ¸ Ð¾ÑÐ¸Ñ (Ò³Ð°ÑÑÐ¾ Ð°Ð· Ð°ÐºÐºÐ°ÑÐ½ÑÐ¸ Ð´Ð¸Ð³Ð°Ñ) Ð°Ð»Ð»Ð°ÐºÐ°Ð¹ Ð»Ð°Ð¹Ðº ÑÐ¸ÑÐ¸ÑÑÐ¾Ð´Ð° ÑÑÐ´Ð°Ð°ÑÑ!</i>"
-                    f"{VIP_PROMO_FOOTER}",
-                    parse_mode="HTML",
-                    reply_markup=DEVELOPER_KEYBOARD
-                )
+                await update.message.reply_text(f"In akkaunt imruz like giriftaast! Boqimonda: {rem_hms}")
                 return
 
         if tg_user_id not in user_history:
@@ -474,20 +387,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         if len(user_history[tg_user_id]) >= MAX_UIDS_PER_USER:
-            oldest_item = min(user_history[tg_user_id], key=lambda x: float(x["time"]))
-            rem_hms = format_hms(COOLDOWN_TIME - (now - float(oldest_item["time"])))
-
-            await update.message.reply_text(
-                "â ï¸ <b>ÐÐÐÐÐ¢Ð ÐÐÐÐÐ£ÐÐ¢Ð TELEGRAM ÐÐ£Ð  ÐÐ¡Ð¢!</b>\n"
-                "âââââââââââ\n"
-                f"ð¤ <b>ÐÐ¾ÑÐ±Ð°Ñ:</b> <code>{escape_html(tg_full_name)}</code>\n"
-                f"ð« Ð¨ÑÐ¼Ð¾ Ð¼ÐµÑÐ°Ð²Ð¾Ð½ÐµÐ´ Ð´Ð°Ñ 24 ÑÐ¾Ð°Ñ ÑÐ°Ð½Ò³Ð¾ Ð±Ð° <b>{MAX_UIDS_PER_USER} UID</b> Ð»Ð°Ð¹Ðº ÑÐ¸ÑÐ¸ÑÑÐµÐ´!\n\n"
-                f"â³ <b>ÐÐ°ÒÑÐ¸ Ð±Ð¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð° ÑÐ¾ ÐºÑÑÐ¾Ð´Ð°ÑÐ°Ð²Ó£:</b>\n"
-                f"ð <code>{rem_hms}</code>"
-                f"{VIP_PROMO_FOOTER}",
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
-            )
+            await update.message.reply_text("Limiti telegram pur ast! 24 soat boyad intizor shaved.")
             return
 
     active_requests.add(lock_key_user)
@@ -507,18 +407,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        vip_header = "ð <b>VIP AUTOLIKE Ð¤ÐÐªÐÐ</b>\n" if vip_flag else ""
-        progress = await update.message.reply_text(
-            f"{vip_header}"
-            f"ð¥ <b>PARNETKA SYSTEM</b>\n"
-            f"<blockquote>"
-            f"â¡ <b>ÐÒÐ¾Ð·Ð¸ ÑÐ¸ÑÑÐµÐ¼Ð°Ð¸ Ð»Ð°Ð¹Ðº...</b>\n"
-            f"ð <b>UID:</b> <code>{uid}</code>\n"
-            f"ð <b>Ò²Ð¾Ð»Ð°Ñ:</b> <code>[â±â±â±â±â±â±â±â±â±â±]</code> <b>1%</b>\n"
-            f"â³ <i>ÐÑÑÑÐ°Ð½ ÑÐ°Ð½Ð´ ÑÐ¾Ð½Ð¸Ñ Ð¸Ð½ÑÐ¸Ð·Ð¾Ñ ÑÐ°Ð²ÐµÐ´...</i>"
-            f"</blockquote>",
-            parse_mode="HTML"
-        )
+        progress = await update.message.reply_text(f"Ogozi sistemai like... UID: {uid}")
 
         api_task = asyncio.create_task(send_likes_batch(uid, amount))
         await run_kinematic_animation(progress, uid, amount, vip_flag)
@@ -535,16 +424,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = escape_html(res.get("error") or "ÐÐ¸Ð¼Ð¸ÑÐ¸ ÑÓ¯Ð·Ð¾Ð½Ð° Ð¿ÑÑ Ð°ÑÑ Ñ Ð¼Ð¸Ð½ÑÐ°ÒÐ° Ð´Ð°ÑÑÐ³Ð¸ÑÓ£ Ð½Ð°Ð¼ÐµÑÐ°Ð²Ð°Ð´")
-            await progress.edit_text(
-                "â ï¸ <b>ÐÐÐÐ Ð¤ÐÐ ÐÐ¡Ð¢ÐÐÐ ÐÐÐ¨Ð£Ð (0 ÐÐÐÐ)!</b>\n"
-                "âââââââââââ\n"
-                f"ð <b>UID:</b> <code>{uid}</code>\n"
-                f"ð <b>Ð¡Ð°Ð±Ð°Ð±:</b> <code>{err_reason}</code>"
-                f"{VIP_PROMO_FOOTER}",
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
-            )
+            err_reason = res.get("error") or "Like firistoda nashud."
+            await progress.edit_text(f"Xato: {err_reason}")
             return
 
         likes_sent_successfully = True
@@ -554,52 +435,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nickname = res["nickname"] if res["nickname"] != "N/A" else p_info["nickname"]
 
         likes_given = res["total_added"]
-        before_likes = escape_html(res["first_before"])
-        after_likes = escape_html(res["last_after"])
-        nickname = escape_html(nickname)
-        final_uid = escape_html(res["uid"] or uid)
+        before_likes = res["first_before"]
+        after_likes = res["last_after"]
 
-        vip_rem_str = ""
-        if vip_flag:
-            vip_exp_time = float(db_cache["vips"][uid])
-            vip_rem_str = format_remaining(vip_exp_time - time.time())
-            status_line = f"ð <b>VIP STATUS:</b> ÐÐ¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð° <code>{vip_rem_str}</code>"
-        else:
-            status_line = "â³ <i>ÐÐ°Ð¹ÐºÐ¸ Ð½Ð°Ð²Ð±Ð°ÑÓ£ Ð±Ð° Ð¸Ð½ UID Ð¿Ð°Ñ Ð°Ð· 24 ÑÐ¾Ð°Ñ!</i>"
-
-        caption_html = (
-            "ð¥ <b>Parnetka Likes</b>\n"
-            "<blockquote>"
-            f"ð¤ <b>ÐÐ¾Ð¼:</b> <code>{nickname}</code>\n"
-            f"ð¶ <b>Level:</b> <code>{escape_html(player_level)}</code>\n"
-            f"ð <b>UID:</b> <code>{final_uid}</code>\n\n"
-            f"ð <b>ÐÐµÑ Ð°Ð· Ð»Ð°Ð¹Ðº:</b> <code>{before_likes}</code>\n"
-            f"â¤ï¸âð¥ <b>ÐÐ»Ð¾Ð²Ð° ÑÑÐ´:</b> <code>+{likes_given}</code>\n"
-            f"â¤ï¸ <b>ÐÐ°ÑÐ´ Ð°Ð· Ð»Ð°Ð¹Ðº:</b> <code>{after_likes}</code>"
-            "</blockquote>\n"
-            f"{status_line}"
-            f"{'' if vip_flag else VIP_PROMO_FOOTER}"
+        caption = (
+            f"Parnetka Likes\n"
+            f"Nom: {nickname}\n"
+            f"Level: {player_level}\n"
+            f"UID: {uid}\n\n"
+            f" Pesh az like: {before_likes}\n"
+            f" Ilova shud: +{likes_given}\n"
+            f" Bad az like: {after_likes}"
         )
-
-        if vip_flag:
-            try:
-                chat_info = update.effective_chat
-                chat_name = escape_html(chat_info.title if chat_info.type != "private" else "Ð§Ð°Ñ Ð±Ð¾ ÑÐ°ÑÑÐ¸ÑÑ")
-                user_mention = f"<a href='tg://user?id={user.id}'>{escape_html(user.full_name or 'ÐÐ¾Ð¼Ð°ÑÐ»ÑÐ¼')}</a>"
-                admin_notification = (
-                    f"ð <b>ÐÐ£ÐÐÐ ÐÐ¨Ð ÐÐÐ¢Ð-ÐÐÐÐÐ VIP!</b>\n"
-                    f"âââââââââââ\n"
-                    f"ð¤ <b>ÐÐ°Ð½Ð°Ð½Ð´Ð°:</b> {user_mention} (ID: <code>{user.id}</code>)\n"
-                    f"ð¢ <b>ÐÑÑÓ¯Ò³:</b> <b>{chat_name}</b>\n"
-                    f"ð® <b>ÐÐ¾Ð·Ð¸Ð½Ð³Ð°Ñ:</b> <code>{nickname}</code>\n"
-                    f"ð <b>UID:</b> <code>{final_uid}</code>\n"
-                    f"â¤ï¸âð¥ <b>ÐÐ»Ð¾Ð²Ð° ÑÑÐ´:</b> <code>+{likes_given} Ð»Ð°Ð¹Ðº</code>\n"
-                    f"â³ <b>VIP ÐÐ¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð°:</b> <code>{vip_rem_str}</code>"
-                )
-                for admin_id in ADMIN_IDS:
-                    await context.bot.send_message(chat_id=admin_id, text=admin_notification, parse_mode="HTML")
-            except Exception as admin_err:
-                logging.error(f"VIP admin notification error: {admin_err}")
 
         like_gif_id = db_cache.get("like_gif_id", "")
         if like_gif_id:
@@ -607,14 +454,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await progress.delete()
             except Exception:
                 pass
-            await update.message.reply_animation(
-                animation=like_gif_id,
-                caption=caption_html,
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
-            )
+            await update.message.reply_animation(animation=like_gif_id, caption=caption)
         else:
-            await progress.edit_text(caption_html, parse_mode="HTML", reply_markup=DEVELOPER_KEYBOARD)
+            await progress.edit_text(caption)
 
     except Exception as e:
         if not likes_sent_successfully and not admin_flag and not vip_flag:
@@ -628,7 +470,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_state()
         logging.error(f"/like error: {e}")
         try:
-            await progress.edit_text("â **Ð¥Ð°ÑÐ¾Ð³Ð¸Ð¸ ÑÐµÑÐ²ÐµÑ!**", parse_mode="Markdown")
+            await progress.edit_text("Hatogiyi server!")
         except Exception:
             pass
     finally:
@@ -639,52 +481,39 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/turbo 18778177236`", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /turbo 18778177236")
         return
     uid = context.args[0].strip()
-    msg = await update.message.reply_text(
-        f"â¡ **TURBO VIP ÐÒÐÐ Ð¨Ð£Ð!**\nð UID: `{uid}`\nâ³ *Ð¤Ð¸ÑÐ¸ÑÑÐ¾Ð´Ð°Ð½Ð¸ 500 - 1000 Ð»Ð°Ð¹Ðº (ÑÐ¾ 90 ÑÐ¾Ð½Ð¸Ñ)...*",
-        parse_mode="Markdown"
-    )
+    msg = await update.message.reply_text(f"TURBO VIP ogoz shud! UID: {uid}")
     url = f"{AUTOSYSTEM_URL}/turbo?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
     try:
         timeout_cfg = aiohttp.ClientTimeout(total=95)
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=timeout_cfg) as resp:
-                raw = await resp.text()
+                raw_bytes = await resp.read()
+                raw = raw_bytes.decode('utf-8', errors='ignore')
         data = json.loads(raw)
         if isinstance(data, dict) and data.get("sucesso") is True:
-            await msg.edit_text(
-                f"â **TURBO VIP ÐÐÐÐ£ÐÐÐ¤Ð¤ÐÒÐÐ¯Ð¢ Ð¤ÐÐ ÐÐ¡Ð¢ÐÐÐ Ð¨Ð£Ð!**\n"
-                f"âââââââââââ\n"
-                f"ð **UID:** `{uid}`\n"
-                f"ð¥ **ÐÐ¸ÒÐ´Ð¾Ñ:** `500 - 1000 Ð»Ð°Ð¹Ðº`\n"
-                f"ð¡ **Ð¡ÐµÑÐ²ÐµÑ:** `AutoLikeSystem VIP`",
-                parse_mode="Markdown"
-            )
+            await msg.edit_text(f"TURBO VIP bomuvaffaqiyat firistoda shud! UID: {uid}")
         else:
-            await msg.edit_text(f"â ï¸ **Ò¶Ð°Ð²Ð¾Ð±Ð¸ ÑÐµÑÐ²ÐµÑ:**\n`{raw[:300]}`", parse_mode="Markdown")
+            await msg.edit_text(f"Javobi server: {raw[:300]}")
     except Exception as e:
-        await msg.edit_text(f"â **Ð¥Ð°ÑÐ¾Ð³Ó£:** `{e}`", parse_mode="Markdown")
+        await msg.edit_text(f"Xato: {e}")
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_group_access(update, context):
         return
     if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/info 18778177236`", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /info 18778177236")
         return
     uid = context.args[0].strip()
     p_info = await fetch_player_info(uid)
     await update.message.reply_text(
-        f"ð¤ <b>ÐÐÐªÐÐ£ÐÐÐ¢Ð ÐÐÐÐÐ£ÐÐ¢</b>\n"
-        f"<blockquote>"
-        f"ð· <b>ÐÐ¾Ð¼:</b> <code>{escape_html(p_info['nickname'])}</code>\n"
-        f"ð <b>UID:</b> <code>{uid}</code>\n"
-        f"ð¶ <b>Level:</b> <code>{escape_html(p_info['level'])}</code>\n"
-        f"â¤ï¸ <b>ÐÐ°Ð¹ÐºÒ³Ð¾Ð¸ Ò³Ð¾Ð·Ð¸ÑÐ°:</b> <code>{escape_html(p_info['likes'])}</code>"
-        f"</blockquote>",
-        parse_mode="HTML",
-        reply_markup=DEVELOPER_KEYBOARD
+        f"MA'LUMOTI AKKAUNT\n"
+        f"Nom: {p_info['nickname']}\n"
+        f"UID: {uid}\n"
+        f"Level: {p_info['level']}\n"
+        f"Like-hoi hozira: {p_info['likes']}"
     )
 
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -692,55 +521,42 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp:
-            raw = await resp.text()
-    await update.message.reply_text(f"ð¡ **ÐÐÐÐÐÐ¡Ð Ð¡ÐÐ ÐÐÐ Ð AUTOLIKESYSTEM (CIS):**\n`{raw[:400]}`", parse_mode="Markdown")
+            raw_bytes = await resp.read()
+            raw = raw_bytes.decode('utf-8', errors='ignore')
+    await update.message.reply_text(f"BALANSI SERVERI AUTOLIKESYSTEM:\n{raw[:400]}")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args:
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/reset 18778177236` (UID Ñ TG ID)", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /reset 18778177236")
         return
     target = context.args[0].strip()
     await load_state()
     removed = False
     if target in db_cache.get("uids", {}):
-        entry = db_cache["uids"].pop(target)
-        if isinstance(entry, dict) and entry.get("user_id"):
-            linked_tg_id = str(entry["user_id"])
-            if linked_tg_id in db_cache.get("user_history", {}):
-                db_cache["user_history"][linked_tg_id] = [
-                    item for item in db_cache["user_history"][linked_tg_id]
-                    if item["uid"] != target
-                ]
-        for u_id in db_cache.get("user_history", {}):
-            db_cache["user_history"][u_id] = [
-                item for item in db_cache["user_history"][u_id]
-                if item["uid"] != target
-            ]
+        db_cache["uids"].pop(target)
         removed = True
     if target in db_cache.get("user_history", {}):
-        items = db_cache["user_history"].pop(target, [])
-        for item in items:
-            db_cache.get("uids", {}).pop(item["uid"], None)
+        db_cache["user_history"].pop(target)
         removed = True
     if removed:
         await save_state()
-        await update.message.reply_text(f"â ÐÐ¸Ð¼Ð¸Ñ Ð±Ð°ÑÐ¾Ð¸ `{target}` (Ò³Ð°Ð¼ UID Ð²Ð° Ò³Ð°Ð¼ TG Ð°ÐºÐºÐ°ÑÐ½Ñ) Ð¿ÑÑÑÐ° ÐºÑÑÐ¾Ð´Ð° ÑÑÐ´!", parse_mode="Markdown")
+        await update.message.reply_text(f"Limiti {target} kushoda shud!")
     else:
-        await update.message.reply_text(f"â¹ï¸ `{target}` Ð´Ð°Ñ Ð»Ð¸Ð¼Ð¸Ñ Ð½Ð°Ð±ÑÐ´.", parse_mode="Markdown")
+        await update.message.reply_text(f"{target} dar limit nabud.")
 
 async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args:
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/check 18778177236`", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /check 18778177236")
         return
     target = context.args[0].strip()
     await load_state()
     now = time.time()
     if is_vip_uid(target):
-        await update.message.reply_text(f"ð UID `{target}` VIP Ð°ÑÑ!", parse_mode="Markdown")
+        await update.message.reply_text(f"UID {target} VIP ast!")
         return
     memory_uids = db_cache.get("uids", {})
     if target in memory_uids:
@@ -748,51 +564,36 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ts = float(entry["time"]) if isinstance(entry, dict) else float(entry)
         if (now - ts) < COOLDOWN_TIME:
             rem = format_remaining(COOLDOWN_TIME - (now - ts))
-            await update.message.reply_text(f"â³ UID `{target}` Ð´Ð°Ñ Ð»Ð¸Ð¼Ð¸Ñ Ð°ÑÑ. ÐÐ¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð°: `{rem}`", parse_mode="Markdown")
+            await update.message.reply_text(f"UID {target} dar limit ast. Boqimonda: {rem}")
             return
-    await update.message.reply_text(f"â UID `{target}` Ð¾Ð·Ð¾Ð´ Ð°ÑÑ.", parse_mode="Markdown")
+    await update.message.reply_text(f"UID {target} ozod ast.")
 
 async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     await load_state()
     now = time.time()
-    tj_tz = timezone(timedelta(hours=5))
     memory_uids = db_cache.get("uids", {})
     active_items = []
-    expired = []
     for uid, entry in memory_uids.items():
         ts = float(entry["time"]) if isinstance(entry, dict) else float(entry)
-        u_name = entry.get("name", "ÐÐ¾ÑÐ±Ð°Ñ") if isinstance(entry, dict) else "ÐÐ¾ÑÐ±Ð°Ñ"
-        u_id = entry.get("user_id", "") if isinstance(entry, dict) else ""
         unlock_ts = ts + COOLDOWN_TIME
         if unlock_ts > now:
-            active_items.append((unlock_ts, uid, u_name, u_id))
-        else:
-            expired.append(uid)
-    if expired:
-        for u in expired:
-            memory_uids.pop(u, None)
-        db_cache["uids"] = memory_uids
-        await save_state()
+            active_items.append((unlock_ts, uid))
     if not active_items:
-        await update.message.reply_text("â Ò²Ð°Ð¼Ð°Ð¸ UID-Ò³Ð¾ Ð¾Ð·Ð¾Ð´Ð°Ð½Ð´!", parse_mode="HTML")
+        await update.message.reply_text("Hamai UID-ho ozodand!")
         return
-    active_items.sort(key=lambda x: x[0])
-    lines = [f"ð¥ <b>Ð Ó®ÐÐ¥ÐÐ¢Ð ÐÐÐÐÐ¢Ò²Ð ({len(active_items)} ÑÐ¾):</b>"]
-    for idx, (unlock_ts, uid, u_name, u_id) in enumerate(active_items, start=1):
+    lines = ["ROYXATI LIMITHO:"]
+    for idx, (unlock_ts, uid) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
-        unlock_clock = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%H:%M:%S (%d.%m)")
-        safe_name = escape_html(u_name)
-        user_link = f'<a href="tg://user?id={u_id}">{safe_name}</a>' if u_id else f"<b>{safe_name}</b>"
-        lines.append(f"<blockquote><b>{idx}.</b> ð¤ {user_link}\nð <code>{uid}</code>\nâ³ <code>{rem_hms}</code>\nð <code>{unlock_clock}</code></blockquote>")
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        lines.append(f"{idx}. UID: {uid} | Boqimonda: {rem_hms}")
+    await update.message.reply_text("\n".join(lines))
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if len(context.args) < 2 or not context.args[0].isdigit() or not context.args[1].isdigit():
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/addvip 18778177236 5`", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /addvip 18778177236 5")
         return
     uid = context.args[0].strip()
     days = int(context.args[1].strip())
@@ -800,37 +601,22 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_cache["vips"][uid] = time.time() + (days * 86400)
     db_cache["uids"].pop(uid, None)
     await save_state()
-    auto_msg = ""
-    try:
-        url_auto = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&dias={days}&region=CIS"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url_auto, timeout=15) as resp:
-                if resp.status == 200:
-                    auto_msg = "\nð¡ *ÐÐ°Ñ ÑÐµÑÐ²ÐµÑÐ¸ AutoLikeSystem Ð½Ð¸Ð· ÑÐ°Ð±Ñ ÑÑÐ´!*"
-    except Exception:
-        pass
-    await update.message.reply_text(f"ð VIP Ð±Ð°ÑÐ¾Ð¸ UID `{uid}` Ð±Ð° Ð¼ÑÒ³Ð»Ð°ÑÐ¸ `{days} ÑÓ¯Ð·` ÑÐ°ÑÐ¾Ð» ÑÑÐ´!{auto_msg}", parse_mode="Markdown")
+    await update.message.reply_text(f"VIP baroi UID {uid} ba muddati {days} ruz faol shud!")
 
 async def delvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("ð ÐÐ°Ð¼ÑÐ½Ð°: `/delvip 18778177236`", parse_mode="Markdown")
+        await update.message.reply_text("Namuna: /delvip 18778177236")
         return
     uid = context.args[0].strip()
     await load_state()
     if uid in db_cache["vips"]:
         db_cache["vips"].pop(uid)
         await save_state()
-        try:
-            url_rem = f"{AUTOSYSTEM_URL}/autolike/remove?key={AUTOSYSTEM_KEY}&uid={uid}"
-            async with aiohttp.ClientSession() as session:
-                await session.get(url_rem, timeout=15)
-        except Exception:
-            pass
-        await update.message.reply_text(f"ð UID `{uid}` Ð°Ð· VIP ÑÐ¾ÑÐ¸Ò· ÑÑÐ´.", parse_mode="Markdown")
+        await update.message.reply_text(f"UID {uid} az VIP xorij shud.")
     else:
-        await update.message.reply_text(f"â¹ï¸ UID `{uid}` Ð´Ð°Ñ VIP Ð½Ð°Ð±ÑÐ´.", parse_mode="Markdown")
+        await update.message.reply_text(f"UID {uid} dar VIP nabud.")
 
 async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -840,14 +626,14 @@ async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = []
     for uid, exp in list(db_cache["vips"].items()):
         if float(exp) > now:
-            active.append(f"â¢ `{uid}` â Ð±Ð¾ÒÐ¸Ð¼Ð¾Ð½Ð´Ð°: **{format_remaining(float(exp) - now)}**")
+            active.append(f"UID: {uid} â boqimonda: {format_remaining(float(exp) - now)}")
         else:
             db_cache["vips"].pop(uid)
     await save_state()
     if not active:
-        await update.message.reply_text("ð­ VIP Ð½ÐµÑÑ.")
+        await update.message.reply_text("VIP nest.")
         return
-    await update.message.reply_text("ð **VIP-ÐÐ£Ð¨Ð¢ÐÐ ÐÐÐ:**\n" + "\n".join(active), parse_mode="Markdown")
+    await update.message.reply_text("VIP-MUSHTARIYON:\n" + "\n".join(active))
 
 app = FastAPI()
 
