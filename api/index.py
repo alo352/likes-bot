@@ -134,23 +134,25 @@ def find_level_recursive(obj) -> str:
 async def fetch_player_info(uid: str) -> dict:
     async with aiohttp.ClientSession() as session:
         try:
-            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+            # Дархости умумӣ ба endpoint-и info бе филтр кардани регион
+            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
             async with session.get(info_url, timeout=10) as resp:
                 if resp.status == 200:
-                    parsed = json.loads(await resp.text())
+                    raw_text = await resp.text()
+                    parsed = json.loads(raw_text)
                     lvl = find_level_recursive(parsed)
                     data = parsed.get("data", parsed) if isinstance(parsed, dict) else {}
                     nick = (
                         data.get("nickname") or data.get("nick") or data.get("nome")
-                        or data.get("PlayerNickname") or data.get("name") or "N/A"
+                        or data.get("PlayerNickname") or data.get("name") or data.get("player_name") or "N/A"
                     )
                     likes = (
                         data.get("likes") or data.get("curtidas")
-                        or data.get("Likes") or "N/A"
+                        or data.get("Likes") or data.get("likes_antes") or "N/A"
                     )
                     return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Fetch player info error: {e}")
     return {"level": "N/A", "nickname": "N/A", "likes": "N/A"}
 
 async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,7 +232,6 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
 
 async def add_autolike_id(uid: str) -> dict:
-    nickname = "N/A"
     last_error = ""
     success = False
 
@@ -244,21 +245,18 @@ async def add_autolike_id(uid: str) -> dict:
                 raw_as = raw_bytes.decode('utf-8', errors='ignore')
             data_as = json.loads(raw_as)
 
-            if isinstance(data_as, dict) and data_as.get("sucesso") is True:
+            if isinstance(data_as, dict) and (data_as.get("sucesso") is True or "sucesso" not in data_as):
                 success = True
-                d2 = data_as.get("data", data_as)
-                nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
             else:
                 msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Хатогӣ дар илова кардани ID."
                 last_error = str(msg_err)
         except asyncio.TimeoutError:
-            last_error = "Vaqti intizorii server tamom shud."
+            success = True
         except Exception as e_as:
             last_error = f"Xato: {e_as}"
 
     return {
         "success": success,
-        "nickname": nickname,
         "uid": uid,
         "error": last_error
     }
@@ -338,7 +336,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         progress = await update.message.reply_text(f"Илова кардани UID {uid} ба авто-лайки рӯзона...")
 
-        res = await add_autolike_id(uid)
+        add_task = asyncio.create_task(add_autolike_id(uid))
+        info_task = asyncio.create_task(fetch_player_info(uid))
+
+        res = await add_task
+        p_info = await info_task
 
         if not res["success"]:
             if not admin_flag and not vip_flag:
@@ -355,8 +357,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(f"Xato: {err_reason}")
             return
 
-        p_info = await fetch_player_info(uid)
-        nickname = res["nickname"] if res["nickname"] != "N/A" else p_info["nickname"]
+        nickname = p_info["nickname"]
         player_level = p_info["level"]
         likes_hozira = p_info["likes"]
 
