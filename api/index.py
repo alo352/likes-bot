@@ -141,7 +141,7 @@ def is_admin_user(user) -> bool:
 def find_level_recursive(obj) -> str:
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level") and v is not None:
+            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level", "nivel") and v is not None:
                 val_str = str(v).strip()
                 if val_str.isdigit():
                     return val_str
@@ -163,7 +163,7 @@ async def fetch_player_info_dual(uid: str) -> dict:
         # 1. Кӯшиш аз сервери 1
         try:
             info_url1 = f"{BASE_API_URL}/info?api_key={LIKES_API_KEY}&uid={uid}"
-            async with session.get(info_url1, timeout=4) as resp:
+            async with session.get(info_url1, timeout=5) as resp:
                 if resp.status == 200:
                     parsed = json.loads(await resp.text())
                     lvl = find_level_recursive(parsed)
@@ -178,13 +178,19 @@ async def fetch_player_info_dual(uid: str) -> dict:
         # 2. Кӯшиш аз сервери 2 (AutoLikeSystem /v1/info)
         try:
             info_url2 = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
-            async with session.get(info_url2, timeout=5) as resp:
+            async with session.get(info_url2, timeout=15) as resp:
                 if resp.status == 200:
                     parsed = json.loads(await resp.text())
                     lvl = find_level_recursive(parsed)
                     data = parsed.get("data", parsed) if isinstance(parsed, dict) else {}
-                    nick = data.get("nickname") or data.get("name") or data.get("PlayerNickname") or "N/A"
-                    likes = data.get("likes") or data.get("Likes") or "N/A"
+                    nick = (
+                        data.get("nickname") or data.get("nick") or data.get("nome")
+                        or data.get("PlayerNickname") or data.get("name") or "N/A"
+                    )
+                    likes = (
+                        data.get("likes") or data.get("curtidas")
+                        or data.get("Likes") or "N/A"
+                    )
                     return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
         except Exception:
             pass
@@ -355,7 +361,13 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def send_likes_batch(uid: str, target_amount: int) -> dict:
-    """Аввал аз сервери 1 (fflikes) мефиристад. Агар 0 лайк диҳад ё хато шавад, ба сервери 2 (AutoLikeSystem) мегузарад."""
+    """
+    1. Аввал аз сервери 1 (fflikes.ucbot.net) мефиристад.
+    2. Агар сервери 1 кор накунад ё 0 диҳад, ба сервери 2 (AutoLikeSystem /v1/like) бо timeout=95с мегузарад.
+       Тибқи ҳуҷҷати AutoLikeSystem:
+       - URL: GET /v1/like?key=YOUR_KEY&uid=PLAYER_ID (бе qtd то ба таври пешфарз то 220 лайк диҳад)
+       - Timeout бояд ҳадди ақал 90 сония бошад!
+    """
     total_added = 0
     first_before = None
     last_after = None
@@ -394,7 +406,7 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
                 added = int(details.get("LikesGivenByAPI", 0) or 0)
                 if added <= 0:
-                    last_error = "Лимити сервери 1 ё аккаунт пур шудааст"
+                    last_error = "Лимити сервери 1 пур шудааст"
                     break
 
                 total_added += added
@@ -407,26 +419,64 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
                 last_error = str(e)
                 break
 
-        # КӮШИШИ 2: Агар сервери 1 лайк надод (0 лайк), ба сервери 2 (AutoLikeSystem) мегузарем
+        # КӮШИШИ 2: Сервери 2 (AutoLikeSystem /v1/like бо интизории 95 сония)
         if total_added <= 0:
-            url2 = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}"
+            # Агар корбари оддӣ 100 хоста бошад qtd=100 мефиристем, вагарна бе qtd (то 220 лайк)
+            if target_amount == 100:
+                url2 = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&qtd=100"
+            else:
+                url2 = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}"
+
             try:
-                async with session.get(url2, timeout=20) as resp2:
+                timeout_cfg = aiohttp.ClientTimeout(total=95)
+                async with session.get(url2, timeout=timeout_cfg) as resp2:
                     raw2 = await resp2.text()
                 data2 = json.loads(raw2)
 
-                if isinstance(data2, dict) and not data2.get("error") and data2.get("success") is not False:
+                if isinstance(data2, dict) and data2.get("sucesso") is True:
                     raw_first = data2
                     d2 = data2.get("data", data2)
-                    nickname = d2.get("nickname") or d2.get("PlayerNickname") or d2.get("name") or nickname
-                    first_before = d2.get("likes_before") or d2.get("LikesbeforeCommand") or "N/A"
-                    last_after = d2.get("likes_after") or d2.get("LikesafterCommand") or "N/A"
-                    added2 = int(d2.get("likes_sent") or d2.get("LikesGivenByAPI") or d2.get("added") or 100)
+                    nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
+
+                    before_val = (
+                        d2.get("likes_antes") if d2.get("likes_antes") is not None
+                        else d2.get("antes") if d2.get("antes") is not None
+                        else d2.get("likes_before")
+                    )
+                    after_val = (
+                        d2.get("likes_depois") if d2.get("likes_depois") is not None
+                        else d2.get("depois") if d2.get("depois") is not None
+                        else d2.get("likes_after")
+                    )
+
+                    if before_val is not None:
+                        first_before = before_val
+                    if after_val is not None:
+                        last_after = after_val
+
+                    added2 = int(
+                        d2.get("likes_enviados") or d2.get("enviados")
+                        or d2.get("likes_sent") or d2.get("added") or 0
+                    )
+                    # Агар сайт рақами enviada-ро нафиристад, аз фарқи (баъд - пеш) ҳисоб мекунем
+                    if added2 <= 0 and isinstance(before_val, int) and isinstance(after_val, int) and after_val > before_val:
+                        added2 = after_val - before_val
+
                     if added2 > 0:
                         total_added = added2
                         last_error = ""
+                    else:
+                        last_error = str(
+                            data2.get("mensagem") or data2.get("erro")
+                            or data2.get("message") or "0 лайк фиристода шуд (Минтақа ё лимит)"
+                        )
                 else:
-                    last_error = str(data2.get("message") or data2.get("error") or raw2[:150])
+                    last_error = str(
+                        data2.get("mensagem") or data2.get("erro")
+                        or data2.get("message") or raw2[:150]
+                    )
+            except asyncio.TimeoutError:
+                last_error = "Вақти интизории сервер (95с) ба охир расид"
             except Exception as e2:
                 last_error = f"Server2: {e2}"
 
@@ -447,12 +497,11 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag:
         ("⚡ <b>Пайвастшавӣ ба сервери FF...</b>", "▰▱▱▱▱▱▱▱▱▱", "17%", "🔄 <i>Тафтиши дастрасӣ...</i>"),
         ("🔍 <b>Ҷустуҷӯи аккаунти бозингар...</b>", "▰▰▰▱▱▱▱▱▱▱", "34%", "📡 <i>Дарёфти маълумоти UID...</i>"),
         (f"⚙️ <b>Омодасозии {amount} лайк...</b>", "▰▰▰▰▰▱▱▱▱▱", "52%", "📦 <i>Танзими бастаи лайкҳо...</i>"),
-        ("🚀 <b>Фиристодани лайкҳо ба сервер...</b>", "▰▰▰▰▰▰▰▱▱▱", "71%", "🔥 <i>Раванди интиқол оғоз шуд...</i>"),
-        ("❤️‍🔥 <b>Воридшавии лайкҳо ба аккаунт...</b>", "▰▰▰▰▰▰▰▰▰▱", "89%", "✨ <i>Тасдиқи натиҷаҳо...</i>"),
-        ("✅ <b>Анҷом ёфт! Омодасозии чек...</b>", "▰▰▰▰▰▰▰▰▰▰", "100%", "🎉 <i>Ҳамаи лайкҳо фиристода шуданд!</i>"),
+        ("🚀 <b>Фиристодани лайкҳо ба сервер...</b>", "▰▰▰▰▰▰▰▱▱▱", "71%", "🔥 <i>Ин раванд метавонад то 60-80 сония тӯл кашад...</i>"),
+        ("❤️‍🔥 <b>Воридшавии лайкҳо ба аккаунт...</b>", "▰▰▰▰▰▰▰▰▰▱", "89%", "✨ <i>Санҷиши ҳисобкунаки профил...</i>"),
     ]
     for title, bar, pct, sub_status in frames:
-        await asyncio.sleep(0.9)
+        await asyncio.sleep(1.2)
         try:
             await progress_msg.edit_text(
                 f"{vip_header}"
@@ -612,21 +661,21 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if res["total_added"] <= 0:
             if not admin_flag and not vip_flag:
+                memory_uids.pop(uid, None)
                 user_history[tg_user_id] = [
                     item for item in user_history.get(tg_user_id, [])
                     if item["uid"] != uid
                 ]
+                db_cache["uids"] = memory_uids
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            rem_hms = format_hms(COOLDOWN_TIME)
+            err_reason = escape_html(res.get("error") or "Лимити рӯзона пур аст ё минтақа дастгирӣ намешавад")
             await progress.edit_text(
-                "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ!</b>\n"
+                "⚠️ <b>ЛАЙК ФИРИСТОДА НАШУД (0 ЛАЙК)!</b>\n"
                 "━━━━━━━━━━━\n"
                 f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                f"🚫 <i>Ин аккаунт аллакай дар сервер лайк гирифтааст.</i>\n\n"
-                f"⏳ <b>Боқимонда то кушодашавӣ:</b>\n"
-                f"👉 <code>{rem_hms}</code>"
+                f"📌 <b>Сабаб:</b> <code>{err_reason}</code>"
                 f"{VIP_PROMO_FOOTER}",
                 parse_mode="HTML",
                 reply_markup=DEVELOPER_KEYBOARD
@@ -747,18 +796,19 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = context.args[0].strip()
     msg = await update.message.reply_text(
-        f"⚡ **TURBO VIP ОҒОЗ ШУД!**\n🆔 UID: `{uid}`\n⏳ *Фиристодани 500 - 1000 лайк...*",
+        f"⚡ **TURBO VIP ОҒОЗ ШУД!**\n🆔 UID: `{uid}`\n⏳ *Фиристодани 500 - 1000 лайк (то 90 сония)...*",
         parse_mode="Markdown"
     )
 
     url = f"{AUTOSYSTEM_URL}/turbo?key={AUTOSYSTEM_KEY}&uid={uid}"
     try:
+        timeout_cfg = aiohttp.ClientTimeout(total=95)
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=25) as resp:
+            async with session.get(url, timeout=timeout_cfg) as resp:
                 raw = await resp.text()
         data = json.loads(raw)
 
-        if isinstance(data, dict) and not data.get("error"):
+        if isinstance(data, dict) and data.get("sucesso") is True:
             await msg.edit_text(
                 f"✅ **TURBO VIP БОМУВАФФАҚИЯТ ФИРИСТОДА ШУД!**\n"
                 f"━━━━━━━━━━━\n"
@@ -803,7 +853,7 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}", timeout=10) as resp:
             raw1 = await resp.text()
-        async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=10) as resp2:
+        async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp2:
             raw2 = await resp2.text()
     await update.message.reply_text(
         f"📊 **БАЛАНСИ СЕРВЕРИ 1:**\n`{raw1[:300]}`\n\n"
@@ -940,7 +990,7 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         url_auto = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&dias={days}"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url_auto, timeout=10) as resp:
+            async with session.get(url_auto, timeout=15) as resp:
                 if resp.status == 200:
                     auto_msg = "\n📡 *Дар сервери AutoLikeSystem низ сабт шуд!*"
     except Exception:
@@ -966,7 +1016,7 @@ async def delvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             url_rem = f"{AUTOSYSTEM_URL}/autolike/remove?key={AUTOSYSTEM_KEY}&uid={uid}"
             async with aiohttp.ClientSession() as session:
-                await session.get(url_rem, timeout=10)
+                await session.get(url_rem, timeout=15)
         except Exception:
             pass
         await update.message.reply_text(f"🗑 UID `{uid}` аз VIP хориҷ шуд.", parse_mode="Markdown")
