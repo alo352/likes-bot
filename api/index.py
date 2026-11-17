@@ -24,8 +24,6 @@ ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400
-DEFAULT_LIKES_AMOUNT = 100
-ADMIN_DEFAULT_LIKES = 200
 MAX_UIDS_PER_USER = 1
 
 db_cache = {
@@ -42,9 +40,13 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 ACCESS_DENIED_TEXT = (
-    "DASTRASI MAHDUD AST!\n"
-    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.\n\n"
-    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?\n"
+    "DASTRASI MAHDUD AST!
+"
+    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.
+
+"
+    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?
+"
     "Ba admin murojiat kuned: @parnetka"
 )
 
@@ -113,20 +115,20 @@ def escape_html(text: str) -> str:
 def is_admin_user(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
-def find_level_recursive(obj) -> str:
+def find_info_recursive(obj, keys):
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level", "nivel") and v is not None:
+            if k.lower() in keys and v is not None:
                 val_str = str(v).strip()
-                if val_str.isdigit():
+                if val_str:
                     return val_str
         for v in obj.values():
-            res = find_level_recursive(v)
+            res = find_info_recursive(v, keys)
             if res:
                 return res
     elif isinstance(obj, list):
         for item in obj:
-            res = find_level_recursive(item)
+            res = find_info_recursive(item, keys)
             if res:
                 return res
     return ""
@@ -134,102 +136,24 @@ def find_level_recursive(obj) -> str:
 async def fetch_player_info(uid: str) -> dict:
     async with aiohttp.ClientSession() as session:
         try:
-            # Дархости умумӣ ба endpoint-и info бе филтр кардани регион
-            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
+            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
             async with session.get(info_url, timeout=10) as resp:
                 if resp.status == 200:
                     raw_text = await resp.text()
                     parsed = json.loads(raw_text)
-                    lvl = find_level_recursive(parsed)
-                    data = parsed.get("data", parsed) if isinstance(parsed, dict) else {}
-                    nick = (
-                        data.get("nickname") or data.get("nick") or data.get("nome")
-                        or data.get("PlayerNickname") or data.get("name") or data.get("player_name") or "N/A"
-                    )
-                    likes = (
-                        data.get("likes") or data.get("curtidas")
-                        or data.get("Likes") or data.get("likes_antes") or "N/A"
-                    )
-                    return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
+                    
+                    lvl = find_info_recursive(parsed, ("level", "playerlevel", "accountlevel", "player_level", "nivel"))
+                    nick = find_info_recursive(parsed, ("nickname", "nick", "nome", "playernickname", "name", "player_name"))
+                    likes = find_info_recursive(parsed, ("likes", "curtidas", "likes_antes", "like"))
+                    
+                    return {
+                        "level": lvl if lvl.isdigit() else "N/A",
+                        "nickname": nick if nick else "N/A",
+                        "likes": likes if likes.isdigit() else "N/A"
+                    }
         except Exception as e:
             logging.error(f"Fetch player info error: {e}")
     return {"level": "N/A", "nickname": "N/A", "likes": "N/A"}
-
-async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    result = update.my_chat_member
-    if not result:
-        return
-    chat = result.chat
-    user = result.from_user
-    new_status = result.new_chat_member.status
-    if new_status in ["member", "administrator"]:
-        if chat.id not in ALLOWED_GROUPS and not is_admin_user(user):
-            try:
-                await context.bot.leave_chat(chat.id)
-            except Exception as e:
-                logging.error(f"Leave unauthorized chat error: {e}")
-            try:
-                user_full_name = escape_html(user.full_name or user.first_name or "Nomalum")
-                user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
-                username_str = f" (@{user.username})" if user.username else ""
-                chat_title = escape_html(chat.title or "Guruh")
-                alert_text = (
-                    f"BOT AZ GURUH BAROVARDA SHUD!\n"
-                    f"Guruh: {chat_title} (ID: {chat.id})\n"
-                    f"Kard: {user_mention}{username_str}"
-                )
-                for admin_id in ADMIN_IDS:
-                    await context.bot.send_message(chat_id=admin_id, text=alert_text, parse_mode="HTML")
-            except Exception as e:
-                logging.error(f"Alert error: {e}")
-
-async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
-    chat = update.effective_chat
-    user = update.effective_user
-    if not chat:
-        return False
-    if is_admin_user(user) or is_vip:
-        return True
-    if chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS:
-        try:
-            await context.bot.leave_chat(chat.id)
-        except Exception:
-            pass
-        return False
-    if chat.type == "private":
-        if update.message:
-            await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
-        return False
-    return chat.id in ALLOWED_GROUPS
-
-async def handle_admin_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global db_cache
-    user = update.effective_user
-    chat = update.effective_chat
-    if not is_admin_user(user) or not chat or chat.type != "private":
-        return
-    if update.message and update.message.animation:
-        await load_state()
-        db_cache["like_gif_id"] = update.message.animation.file_id
-        await save_state()
-        await update.message.reply_text("GIF bomuvaffaqiyat nasb shud!")
-
-async def delgif_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global db_cache
-    if not is_admin_user(update.effective_user):
-        return
-    await load_state()
-    db_cache["like_gif_id"] = ""
-    await save_state()
-    await update.message.reply_text("GIF pok karda shud.")
-
-async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    user = update.effective_user
-    if is_admin_user(user):
-        return
-    if chat and chat.type == "private" and update.message:
-        await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
 
 async def add_autolike_id(uid: str) -> dict:
     last_error = ""
@@ -248,7 +172,7 @@ async def add_autolike_id(uid: str) -> dict:
             if isinstance(data_as, dict) and (data_as.get("sucesso") is True or "sucesso" not in data_as):
                 success = True
             else:
-                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Хатогӣ дар илова кардани ID."
+                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Ð¥Ð°ÑÐ¾Ð³Ó£ Ð´Ð°Ñ Ð¸Ð»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ ID."
                 last_error = str(msg_err)
         except asyncio.TimeoutError:
             success = True
@@ -271,8 +195,20 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         check_uid = context.args[-1].strip()
         vip_flag = is_vip_uid(check_uid)
 
-    if not await check_group_access(update, context, is_vip=vip_flag):
+    chat = update.effective_chat
+    if not chat:
         return
+    if not admin_flag and not vip_flag:
+        if chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS:
+            try:
+                await context.bot.leave_chat(chat.id)
+            except Exception:
+                pass
+            return
+        if chat.type == "private":
+            if update.message:
+                await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
+            return
 
     if len(context.args) == 1:
         uid = context.args[0].strip()
@@ -304,7 +240,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elapsed_uid = now - uid_time
             if elapsed_uid < COOLDOWN_TIME:
                 rem_hms = format_hms(COOLDOWN_TIME - elapsed_uid)
-                await update.message.reply_text(f"In akkaunt imruz ба авто-лайк ҳамроҳ шудааст! Boqimonda: {rem_hms}")
+                await update.message.reply_text(f"In akkaunt imruz Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹Ðº Ò³Ð°Ð¼ÑÐ¾Ò³ ÑÑÐ´Ð°Ð°ÑÑ! Boqimonda: {rem_hms}")
                 return
 
         if tg_user_id not in user_history:
@@ -334,7 +270,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        progress = await update.message.reply_text(f"Илова кардани UID {uid} ба авто-лайки рӯзона...")
+        progress = await update.message.reply_text(f"ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ UID {uid} Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹ÐºÐ¸ ÑÓ¯Ð·Ð¾Ð½Ð°...")
 
         add_task = asyncio.create_task(add_autolike_id(uid))
         info_task = asyncio.create_task(fetch_player_info(uid))
@@ -353,7 +289,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = res.get("error") or "Илова карда нашуд."
+            err_reason = res.get("error") or "ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð° Ð½Ð°ÑÑÐ´."
             await progress.edit_text(f"Xato: {err_reason}")
             return
 
@@ -362,12 +298,19 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         likes_hozira = p_info["likes"]
 
         caption = (
-            f"✅ UID با муваффақият ба Авто-Лайк илова шуд!\n\n"
-            f"👤 Ном: {nickname}\n"
-            f"⭐ Level: {player_level}\n"
-            f"🆔 UID: {uid}\n"
-            f"❤️ Лайкҳои ҳозира: {likes_hozira}\n\n"
-            f"ℹ️ Акнун ин аккаунт ҳар рӯз ба таври худкор лайк мегирад!"
+            f"â UID Ø¨Ø§ Ð¼ÑÐ²Ð°ÑÑÐ°ÒÐ¸ÑÑ Ð±Ð° ÐÐ²ÑÐ¾-ÐÐ°Ð¹Ðº Ð¸Ð»Ð¾Ð²Ð° ÑÑÐ´!
+
+"
+            f"ð¤ ÐÐ¾Ð¼: {nickname}
+"
+            f"â­ Level: {player_level}
+"
+            f"ð UID: {uid}
+"
+            f"â¤ï¸ ÐÐ°Ð¹ÐºÒ³Ð¾Ð¸ Ò³Ð¾Ð·Ð¸ÑÐ°: {likes_hozira}
+
+"
+            f"â¹ï¸ ÐÐºÐ½ÑÐ½ Ð¸Ð½ Ð°ÐºÐºÐ°ÑÐ½Ñ Ò³Ð°Ñ ÑÓ¯Ð· Ð±Ð° ÑÐ°Ð²ÑÐ¸ ÑÑÐ´ÐºÐ¾Ñ Ð»Ð°Ð¹Ðº Ð¼ÐµÐ³Ð¸ÑÐ°Ð´!"
         )
 
         like_gif_id = db_cache.get("like_gif_id", "")
@@ -383,12 +326,33 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"/like error: {e}")
         try:
-            await progress.edit_text("Хатогии сервер!")
+            await progress.edit_text("Ð¥Ð°ÑÐ¾Ð³Ð¸Ð¸ ÑÐµÑÐ²ÐµÑ!")
         except Exception:
             pass
     finally:
         active_requests.discard(lock_key_user)
         active_requests.discard(lock_key_uid)
+
+async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat and chat.type in ["group", "supergroup"] and chat.id not in ALLOWED_GROUPS and not is_admin_user(update.effective_user):
+        return
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Namuna: /info 18778177236")
+        return
+    uid = context.args[0].strip()
+    p_info = await fetch_player_info(uid)
+    await update.message.reply_text(
+        f"MA'LUMOTI AKKAUNT
+"
+        f"Nom: {p_info['nickname']}
+"
+        f"UID: {uid}
+"
+        f"Level: {p_info['level']}
+"
+        f"Like-hoi hozira: {p_info['likes']}"
+    )
 
 async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -413,22 +377,6 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await msg.edit_text(f"Xato: {e}")
 
-async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_group_access(update, context):
-        return
-    if not context.args or not context.args[0].isdigit():
-        await update.message.reply_text("Namuna: /info 18778177236")
-        return
-    uid = context.args[0].strip()
-    p_info = await fetch_player_info(uid)
-    await update.message.reply_text(
-        f"MA'LUMOTI AKKAUNT\n"
-        f"Nom: {p_info['nickname']}\n"
-        f"UID: {uid}\n"
-        f"Level: {p_info['level']}\n"
-        f"Like-hoi hozira: {p_info['likes']}"
-    )
-
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
@@ -436,7 +384,8 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp:
             raw_bytes = await resp.read()
             raw = raw_bytes.decode('utf-8', errors='ignore')
-    await update.message.reply_text(f"ROYXATI AUTOLIKE DAR SERVER:\n{raw[:400]}")
+    await update.message.reply_text(f"ROYXATI AUTOLIKE DAR SERVER:
+{raw[:400]}")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -500,7 +449,8 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, (unlock_ts, uid) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
         lines.append(f"{idx}. UID: {uid} | Boqimonda: {rem_hms}")
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("
+".join(lines))
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -539,14 +489,75 @@ async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = []
     for uid, exp in list(db_cache["vips"].items()):
         if float(exp) > now:
-            active.append(f"UID: {uid} — boqimonda: {format_remaining(float(exp) - now)}")
+            active.append(f"UID: {uid} â boqimonda: {format_remaining(float(exp) - now)}")
         else:
             db_cache["vips"].pop(uid)
     await save_state()
     if not active:
         await update.message.reply_text("VIP nest.")
         return
-    await update.message.reply_text("VIP-MUSHTARIYON:\n" + "\n".join(active))
+    await update.message.reply_text("VIP-MUSHTARIYON:
+" + "
+".join(active))
+
+async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.my_chat_member
+    if not result:
+        return
+    chat = result.chat
+    user = result.from_user
+    new_status = result.new_chat_member.status
+    if new_status in ["member", "administrator"]:
+        if chat.id not in ALLOWED_GROUPS and not is_admin_user(user):
+            try:
+                await context.bot.leave_chat(chat.id)
+            except Exception as e:
+                logging.error(f"Leave unauthorized chat error: {e}")
+            try:
+                user_full_name = escape_html(user.full_name or user.first_name or "Nomalum")
+                user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
+                username_str = f" (@{user.username})" if user.username else ""
+                chat_title = escape_html(chat.title or "Guruh")
+                alert_text = (
+                    f"BOT AZ GURUH BAROVARDA SHUD!
+"
+                    f"Guruh: {chat_title} (ID: {chat.id})
+"
+                    f"Kard: {user_mention}{username_str}"
+                )
+                for admin_id in ADMIN_IDS:
+                    await context.bot.send_message(chat_id=admin_id, text=alert_text, parse_mode="HTML")
+            except Exception as e:
+                logging.error(f"Alert error: {e}")
+
+async def handle_admin_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global db_cache
+    user = update.effective_user
+    chat = update.effective_chat
+    if not is_admin_user(user) or not chat or chat.type != "private":
+        return
+    if update.message and update.message.animation:
+        await load_state()
+        db_cache["like_gif_id"] = update.message.animation.file_id
+        await save_state()
+        await update.message.reply_text("GIF bomuvaffaqiyat nasb shud!")
+
+async def delgif_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global db_cache
+    if not is_admin_user(update.effective_user):
+        return
+    await load_state()
+    db_cache["like_gif_id"] = ""
+    await save_state()
+    await update.message.reply_text("GIF pok karda shud.")
+
+async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if is_admin_user(user):
+        return
+    if chat and chat.type == "private" and update.message:
+        await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
 
 app = FastAPI()
 
@@ -562,6 +573,7 @@ async def ensure_bot_ready():
         ptb_application.add_handler(CommandHandler("reset", reset_command))
         ptb_application.add_handler(CommandHandler("check", check_command))
         ptb_application.add_handler(CommandHandler("limits", limits_command))
+        ptb_application.add_handler(CommandHandler.addvip, addvip_command) if hasattr(CommandHandler, 'addvip') else None
         ptb_application.add_handler(CommandHandler("addvip", addvip_command))
         ptb_application.add_handler(CommandHandler("delvip", delvip_command))
         ptb_application.add_handler(CommandHandler("viplist", viplist_command))
