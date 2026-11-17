@@ -42,9 +42,13 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 ACCESS_DENIED_TEXT = (
-    "DASTRASI MAHDUD AST!\n"
-    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.\n\n"
-    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?\n"
+    "DASTRASI MAHDUD AST!
+"
+    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.
+
+"
+    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?
+"
     "Ba admin murojiat kuned: @parnetka"
 )
 
@@ -172,8 +176,10 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 username_str = f" (@{user.username})" if user.username else ""
                 chat_title = escape_html(chat.title or "Guruh")
                 alert_text = (
-                    f"BOT AZ GURUH BAROVARDA ШУД!\n"
-                    f"Guruh: {chat_title} (ID: {chat.id})\n"
+                    f"BOT AZ GURUH BAROVARDA SHUD!
+"
+                    f"Guruh: {chat_title} (ID: {chat.id})
+"
                     f"Kard: {user_mention}{username_str}"
                 )
                 for admin_id in ADMIN_IDS:
@@ -229,56 +235,27 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
     if chat and chat.type == "private" and update.message:
         await update.message.reply_text(ACCESS_DENIED_TEXT, reply_markup=DEVELOPER_KEYBOARD)
 
-async def send_likes_batch(uid: str, target_amount: int) -> dict:
-    total_added = 0
-    first_before = None
-    last_after = None
+async def add_autolike_id(uid: str) -> dict:
     nickname = "N/A"
-    resp_uid = uid
     last_error = ""
-    raw_first = {}
+    success = False
 
     async with aiohttp.ClientSession() as session:
-        url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+        url_as = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
 
         try:
-            timeout_cfg = aiohttp.ClientTimeout(total=95)
+            timeout_cfg = aiohttp.ClientTimeout(total=30)
             async with session.get(url_as, timeout=timeout_cfg) as resp_as:
                 raw_bytes = await resp_as.read()
                 raw_as = raw_bytes.decode('utf-8', errors='ignore')
             data_as = json.loads(raw_as)
 
             if isinstance(data_as, dict) and data_as.get("sucesso") is True:
-                raw_first = data_as
+                success = True
                 d2 = data_as.get("data", data_as)
                 nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
-
-                before_val = (
-                    d2.get("likes_antes") if d2.get("likes_antes") is not None
-                    else d2.get("antes") if d2.get("antes") is not None
-                    else d2.get("likes_before")
-                )
-                after_val = (
-                    d2.get("likes_depois") if d2.get("likes_depois") is not None
-                    else d2.get("depois") if d2.get("depois") is not None
-                    else d2.get("likes_after")
-                )
-
-                if before_val is not None:
-                    first_before = before_val
-                if after_val is not None:
-                    last_after = after_val
-
-                added_as = int(
-                    d2.get("likes_enviados") or d2.get("enviados")
-                    or d2.get("likes_sent") or d2.get("added") or target_amount
-                )
-                if added_as <= 0 and isinstance(before_val, int) and isinstance(after_val, int) and after_val > before_val:
-                    added_as = after_val - before_val
-
-                total_added = added_as if added_as > 0 else target_amount
             else:
-                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Loyiha dar navbat ast."
+                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "XÑÐ¾Ð³Ó£ Ð´Ð°Ñ Ð¸Ð»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ ID."
                 last_error = str(msg_err)
         except asyncio.TimeoutError:
             last_error = "Vaqti intizorii server tamom shud."
@@ -286,35 +263,11 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
             last_error = f"Xato: {e_as}"
 
     return {
-        "total_added": total_added,
-        "first_before": first_before if first_before is not None else "N/A",
-        "last_after": last_after if last_after is not None else "N/A",
+        "success": success,
         "nickname": nickname,
-        "uid": resp_uid,
-        "error": last_error,
-        "raw_first": raw_first
+        "uid": uid,
+        "error": last_error
     }
-
-async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
-    vip_header = "VIP AUTOLIKE FAOL\n" if vip_flag else ""
-    frames = [
-        ("Payvastshavi ba AutoLikeSystem...", "17%"),
-        ("Justujui akkanti bozinger...", "34%"),
-        (f"Omodasoziyi {amount} like...", "52%"),
-        (" Firistodani likeho ba server...", "71%"),
-        (" Voridshavi ba akkant...", "89%"),
-    ]
-    for title, pct in frames:
-        await asyncio.sleep(1.2)
-        try:
-            await progress_msg.edit_text(
-                f"{vip_header}"
-                f"PARNETKA SYSTEM\n"
-                f"{title}\n"
-                f"UID: {uid} ({pct})"
-            )
-        except Exception:
-            pass
 
 async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
@@ -330,22 +283,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) == 1:
-        amount_str = str(ADMIN_DEFAULT_LIKES if admin_flag else DEFAULT_LIKES_AMOUNT)
         uid = context.args[0].strip()
-    elif len(context.args) == 2:
-        amount_str = context.args[0].strip()
+    elif len(context.args) >= 2:
         uid = context.args[1].strip()
     else:
         await update.message.reply_text("Tarzi istifoda: /like {UID}")
         return
 
-    if not amount_str.isdigit() or not uid.isdigit() or not (8 <= len(uid) <= 12):
+    if not uid.isdigit() or not (8 <= len(uid) <= 12):
         await update.message.reply_text("Formati xato! Namuna: /like 18778177236")
         return
 
-    amount = int(amount_str)
     tg_user_id = str(user.id)
-
     lock_key_user = f"user_{tg_user_id}"
     lock_key_uid = f"uid_{uid}"
     if lock_key_user in active_requests or lock_key_uid in active_requests:
@@ -363,7 +312,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elapsed_uid = now - uid_time
             if elapsed_uid < COOLDOWN_TIME:
                 rem_hms = format_hms(COOLDOWN_TIME - elapsed_uid)
-                await update.message.reply_text(f"In akkaunt imruz like giriftaast! Boqimonda: {rem_hms}")
+                await update.message.reply_text(f"In akkaunt imruz Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹Ðº Ò³Ð°Ð¼ÑÐ¾Ò³ ÑÑÐ´Ð°Ð°ÑÑ! Boqimonda: {rem_hms}")
                 return
 
         if tg_user_id not in user_history:
@@ -381,8 +330,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_requests.add(lock_key_user)
     active_requests.add(lock_key_uid)
 
-    likes_sent_successfully = False
-
     try:
         if not admin_flag and not vip_flag:
             user_history[tg_user_id].append({"uid": uid, "time": now})
@@ -395,13 +342,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        progress = await update.message.reply_text(f"Ogozi sistemai like... UID: {uid}")
+        progress = await update.message.reply_text(f"ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð°Ð½Ð¸ UID {uid} Ð±Ð° Ð°Ð²ÑÐ¾-Ð»Ð°Ð¹ÐºÐ¸ ÑÓ¯Ð·Ð¾Ð½Ð°...")
 
-        api_task = asyncio.create_task(send_likes_batch(uid, amount))
-        await run_kinematic_animation(progress, uid, amount, vip_flag)
-        res = await api_task
+        res = await add_autolike_id(uid)
 
-        if res["total_added"] <= 0:
+        if not res["success"]:
             if not admin_flag and not vip_flag:
                 memory_uids.pop(uid, None)
                 user_history[tg_user_id] = [
@@ -412,28 +357,29 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = res.get("error") or "Like firistoda nashud."
+            err_reason = res.get("error") or "ÐÐ»Ð¾Ð²Ð° ÐºÐ°ÑÐ´Ð° Ð½Ð°ÑÑÐ´."
             await progress.edit_text(f"Xato: {err_reason}")
             return
 
-        likes_sent_successfully = True
-
         p_info = await fetch_player_info(uid)
-        player_level = find_level_recursive(res["raw_first"]) or p_info["level"]
         nickname = res["nickname"] if res["nickname"] != "N/A" else p_info["nickname"]
-
-        likes_given = res["total_added"]
-        before_likes = res["first_before"]
-        after_likes = res["last_after"]
+        player_level = p_info["level"]
+        likes_hozira = p_info["likes"]
 
         caption = (
-            f"Parnetka Likes\n"
-            f"Nom: {nickname}\n"
-            f"Level: {player_level}\n"
-            f"UID: {uid}\n\n"
-            f" Pesh az like: {before_likes}\n"
-            f" Ilova shud: +{likes_given}\n"
-            f" Bad az like: {after_likes}"
+            f"â UID Ø¨Ø§ Ð¼ÑÐ²Ð°ÑÑÐ°ÒÐ¸ÑÑ Ð±Ð° ÐÐ²ÑÐ¾-ÐÐ°Ð¹Ðº Ð¸Ð»Ð¾Ð²Ð° ÑÑÐ´!
+
+"
+            f"ð¤ ÐÐ¾Ð¼: {nickname}
+"
+            f"â­ Level: {player_level}
+"
+            f"ð UID: {uid}
+"
+            f"â¤ï¸ ÐÐ°Ð¹ÐºÒ³Ð¾Ð¸ Ò³Ð¾Ð·Ð¸ÑÐ°: {likes_hozira}
+
+"
+            f"â¹ï¸ ÐÐºÐ½ÑÐ½ Ð¸Ð½ Ð°ÐºÐºÐ°ÑÐ½Ñ Ò³Ð°Ñ ÑÓ¯Ð· Ð±Ð° ÑÐ°Ð²ÑÐ¸ ÑÑÐ´ÐºÐ¾Ñ Ð»Ð°Ð¹Ðº Ð¼ÐµÐ³Ð¸ÑÐ°Ð´!"
         )
 
         like_gif_id = db_cache.get("like_gif_id", "")
@@ -447,18 +393,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(caption)
 
     except Exception as e:
-        if not likes_sent_successfully and not admin_flag and not vip_flag:
-            memory_uids.pop(uid, None)
-            user_history[tg_user_id] = [
-                item for item in user_history.get(tg_user_id, [])
-                if item["uid"] != uid
-            ]
-            db_cache["uids"] = memory_uids
-            db_cache["user_history"] = user_history
-            await save_state()
         logging.error(f"/like error: {e}")
         try:
-            await progress.edit_text("Hatogiyi server!")
+            await progress.edit_text("Ð¥Ð°ÑÐ¾Ð³Ð¸Ð¸ ÑÐµÑÐ²ÐµÑ!")
         except Exception:
             pass
     finally:
@@ -497,10 +434,14 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = context.args[0].strip()
     p_info = await fetch_player_info(uid)
     await update.message.reply_text(
-        f"MA'LUMOTI AKKAUNT\n"
-        f"Nom: {p_info['nickname']}\n"
-        f"UID: {uid}\n"
-        f"Level: {p_info['level']}\n"
+        f"MA'LUMOTI AKKAUNT
+"
+        f"Nom: {p_info['nickname']}
+"
+        f"UID: {uid}
+"
+        f"Level: {p_info['level']}
+"
         f"Like-hoi hozira: {p_info['likes']}"
     )
 
@@ -511,7 +452,8 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp:
             raw_bytes = await resp.read()
             raw = raw_bytes.decode('utf-8', errors='ignore')
-    await update.message.reply_text(f"BALANSI SERVERI AUTOLIKESYSTEM:\n{raw[:400]}")
+    await update.message.reply_text(f"ROYXATI AUTOLIKE DAR SERVER:
+{raw[:400]}")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -575,7 +517,8 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, (unlock_ts, uid) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
         lines.append(f"{idx}. UID: {uid} | Boqimonda: {rem_hms}")
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("
+".join(lines))
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -614,14 +557,16 @@ async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = []
     for uid, exp in list(db_cache["vips"].items()):
         if float(exp) > now:
-            active.append(f"UID: {uid} — boqimonda: {format_remaining(float(exp) - now)}")
+            active.append(f"UID: {uid} â boqimonda: {format_remaining(float(exp) - now)}")
         else:
             db_cache["vips"].pop(uid)
     await save_state()
     if not active:
         await update.message.reply_text("VIP nest.")
         return
-    await update.message.reply_text("VIP-MUSHTARIYON:\n" + "\n".join(active))
+    await update.message.reply_text("VIP-MUSHTARIYON:
+" + "
+".join(active))
 
 app = FastAPI()
 
