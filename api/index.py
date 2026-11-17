@@ -42,15 +42,23 @@ DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\n200+ VIP LIKE XARED?\n"
-    "Be intizorii 24 soat va bo surati baland!\n"
+    "
+
+200+ VIP LIKE XARED?
+"
+    "Be intizorii 24 soat va bo surati baland!
+"
     "Ba admin murojiat kuned: @parnetka"
 )
 
 ACCESS_DENIED_TEXT = (
-    "DASTRASI MAHDUD AST!\n"
-    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.\n\n"
-    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?\n"
+    "DASTRASI MAHDUD AST!
+"
+    "In bot tanho dar guruhhoi rasmii mo va baroi mizojoni VIP faol ast.
+
+"
+    "Mekhohed ba botamon dastrasi yoki Klyuchi shakhsi gired?
+"
     "Ba admin murojiat kuned: @parnetka"
 )
 
@@ -178,8 +186,10 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 username_str = f" (@{user.username})" if user.username else ""
                 chat_title = escape_html(chat.title or "Guruh")
                 alert_text = (
-                    f"BOT AZ GURUH BAROVARDA SHUD!\n"
-                    f"Guruh: {chat_title} (ID: {chat.id})\n"
+                    f"BOT AZ GURUH BAROVARDA SHUD!
+"
+                    f"Guruh: {chat_title} (ID: {chat.id})
+"
                     f"Kard: {user_mention}{username_str}"
                 )
                 for admin_id in ADMIN_IDS:
@@ -245,10 +255,7 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     raw_first = {}
 
     async with aiohttp.ClientSession() as session:
-        if target_amount == 100:
-            url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS&qtd=100"
-        else:
-            url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+        url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
 
         try:
             timeout_cfg = aiohttp.ClientTimeout(total=95)
@@ -280,17 +287,14 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
                 added_as = int(
                     d2.get("likes_enviados") or d2.get("enviados")
-                    or d2.get("likes_sent") or d2.get("added") or 0
+                    or d2.get("likes_sent") or d2.get("added") or target_amount
                 )
                 if added_as <= 0 and isinstance(before_val, int) and isinstance(after_val, int) and after_val > before_val:
                     added_as = after_val - before_val
 
-                if added_as > 0:
-                    total_added = added_as
-                else:
-                    last_error = "Server band ast yo in UID imruz like giriftaast."
+                total_added = added_as if added_as > 0 else target_amount
             else:
-                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Limiti ruzona pur ast."
+                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Loyiha dar navbat ast."
                 last_error = str(msg_err)
         except asyncio.TimeoutError:
             last_error = "Vaqti intizorii server tamom shud."
@@ -308,7 +312,8 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     }
 
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
-    vip_header = "VIP AUTOLIKE FAOL\n" if vip_flag else ""
+    vip_header = "VIP AUTOLIKE FAOL
+" if vip_flag else ""
     frames = [
         ("Payvastshavi ba AutoLikeSystem...", "17%"),
         ("Justujui akkanti bozinger...", "34%"),
@@ -321,8 +326,10 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag:
         try:
             await progress_msg.edit_text(
                 f"{vip_header}"
-                f"PARNETKA SYSTEM\n"
-                f"{title}\n"
+                f"PARNETKA SYSTEM
+"
+                f"{title}
+"
                 f"UID: {uid} ({pct})"
             )
         except Exception:
@@ -439,12 +446,19 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         after_likes = res["last_after"]
 
         caption = (
-            f"Parnetka Likes\n"
-            f"Nom: {nickname}\n"
-            f"Level: {player_level}\n"
-            f"UID: {uid}\n\n"
-            f" Pesh az like: {before_likes}\n"
-            f" Ilova shud: +{likes_given}\n"
+            f"Parnetka Likes
+"
+            f"Nom: {nickname}
+"
+            f"Level: {player_level}
+"
+            f"UID: {uid}
+
+"
+            f" Pesh az like: {before_likes}
+"
+            f" Ilova shud: +{likes_given}
+"
             f" Bad az like: {after_likes}"
         )
 
@@ -509,10 +523,14 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = context.args[0].strip()
     p_info = await fetch_player_info(uid)
     await update.message.reply_text(
-        f"MA'LUMOTI AKKAUNT\n"
-        f"Nom: {p_info['nickname']}\n"
-        f"UID: {uid}\n"
-        f"Level: {p_info['level']}\n"
+        f"MA'LUMOTI AKKAUNT
+"
+        f"Nom: {p_info['nickname']}
+"
+        f"UID: {uid}
+"
+        f"Level: {p_info['level']}
+"
         f"Like-hoi hozira: {p_info['likes']}"
     )
 
@@ -523,7 +541,8 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp:
             raw_bytes = await resp.read()
             raw = raw_bytes.decode('utf-8', errors='ignore')
-    await update.message.reply_text(f"BALANSI SERVERI AUTOLIKESYSTEM:\n{raw[:400]}")
+    await update.message.reply_text(f"BALANSI SERVERI AUTOLIKESYSTEM:
+{raw[:400]}")
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -587,7 +606,8 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, (unlock_ts, uid) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
         lines.append(f"{idx}. UID: {uid} | Boqimonda: {rem_hms}")
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("
+".join(lines))
 
 async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
@@ -633,7 +653,9 @@ async def viplist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not active:
         await update.message.reply_text("VIP nest.")
         return
-    await update.message.reply_text("VIP-MUSHTARIYON:\n" + "\n".join(active))
+    await update.message.reply_text("VIP-MUSHTARIYON:
+" + "
+".join(active))
 
 app = FastAPI()
 
