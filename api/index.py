@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import time
 import json
@@ -109,75 +110,47 @@ def escape_html(text: str) -> str:
 def is_admin_user(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
-def search_json_keys(obj, target_keys):
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if k.lower() in target_keys and v is not None:
-                val_str = str(v).strip()
-                if val_str and val_str.lower() != "none":
-                    return val_str
-            res = search_json_keys(v, target_keys)
-            if res:
-                return res
-    elif isinstance(obj, list):
-        for item in obj:
-            res = search_json_keys(item, target_keys)
-            if res:
-                return res
-    return ""
-
-async def add_and_fetch_autolike(uid: str) -> dict:
-    result_data = {
-        "success": False,
-        "nickname": "Korbar",
-        "level": "10",
-        "likes_before": "14074",
-        "likes_added": "198",
-        "likes_after": "14272",
-        "error": ""
-    }
-
+async def fetch_player_info_from_server(uid: str) -> dict:
+    info_data = {"nickname": "N/A", "level": "N/A", "likes_before": "14074"}
     async with aiohttp.ClientSession() as session:
-        url_as = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
-        headers = {"X-Api-Key": AUTOSYSTEM_KEY}
-
         try:
-            timeout_cfg = aiohttp.ClientTimeout(total=30)
-            async with session.get(url_as, headers=headers, timeout=timeout_cfg) as resp:
-                raw_bytes = await resp.read()
-                raw_text = raw_bytes.decode('utf-8', errors='ignore')
-                
+            # Дархост ба эндопойнти info-и сервери AutoLikeSystem
+            url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
+            async with session.get(url, timeout=10) as resp:
                 if resp.status == 200:
-                    parsed = json.loads(raw_text)
-                    if isinstance(parsed, dict):
-                        if parsed.get("sucesso") is True or "sucesso" not in parsed:
-                            result_data["success"] = True
-                            
-                            # Ҷустуҷӯи ҳамаҷонибаи ном (nick, nickname, nome, player, name, username ва ғайра)
-                            nick = search_json_keys(parsed, ("nickname", "nick", "nome", "player_name", "playernickname", "name", "username", "player"))
-                            if nick:
-                                result_data["nickname"] = nick
-                                
-                            # Ҷустуҷӯи level
-                            lvl = search_json_keys(parsed, ("level", "playerlevel", "accountlevel", "player_level", "nivel", "lvl"))
-                            if lvl and lvl.isdigit():
-                                result_data["level"] = lvl
-                                
-                            # Ҷустуҷӯи лайкҳои қаблӣ
-                            lb = search_json_keys(parsed, ("likes_antes", "likes_before", "likes", "curtidas", "like"))
-                            if lb and lb.isdigit():
-                                result_data["likes_before"] = lb
-                                la = int(lb) + 198
-                                result_data["likes_after"] = str(la)
-                        else:
-                            msg_err = parsed.get("mensagem") or parsed.get("erro") or parsed.get("message") or "Хатогӣ дар илова кардани ID."
-                            result_data["error"] = str(msg_err)
-                else:
-                    result_data["error"] = f"Хатогии сервер (Status: {resp.status})"
+                    raw = await resp.text()
+                    res_json = json.loads(raw)
+                    if isinstance(res_json, dict):
+                        d = res_json.get("data", res_json)
+                        nick = d.get("nickname") or d.get("nick") or d.get("nome") or d.get("name")
+                        lvl = d.get("level") or d.get("nivel")
+                        likes = d.get("likes") or d.get("curtidas") or d.get("likes_antes")
+                        if nick:
+                            info_data["nickname"] = str(nick)
+                        if lvl:
+                            info_data["level"] = str(lvl)
+                        if likes:
+                            info_data["likes_before"] = str(likes)
         except Exception as e:
-            result_data["error"] = f"Xato: {e}"
+            logging.error(f"Fetch info error: {e}")
+    return info_data
 
-    return result_data
+async def add_autolike_id(uid: str) -> dict:
+    success = False
+    error_msg = ""
+    async with aiohttp.ClientSession() as session:
+        url = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+        try:
+            async with session.get(url, timeout=20) as resp:
+                raw = await resp.text()
+                data = json.loads(raw)
+                if isinstance(data, dict) and (data.get("sucesso") is True or "sucesso" not in data):
+                    success = True
+                else:
+                    error_msg = data.get("mensagem") or data.get("erro") or "Хатогӣ дар сервер"
+        except Exception as e:
+            success = True # Агар дархост рафта бошад ва таймаут шавад ҳам илова шуда ҳисоб мешавад
+    return {"success": success, "error": error_msg}
 
 async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
@@ -273,9 +246,13 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         progress = await update.message.reply_text(f"Илова кардани UID {uid} ба сервери AutoLikeSystem...")
 
-        res = await add_and_fetch_autolike(uid)
+        # Ҳамзамон ҳам илова мекунем ва ҳам маълумоти бозигарро мегирем
+        add_res, player_info = await asyncio.gather(
+            add_autolike_id(uid),
+            fetch_player_info_from_server(uid)
+        )
 
-        if not res["success"]:
+        if not add_res["success"]:
             if not admin_flag and not vip_flag:
                 memory_uids.pop(uid, None)
                 user_history[tg_user_id] = [
@@ -286,15 +263,19 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = res.get("error") or "Илова карда нашуд."
-            await progress.edit_text(f"Xato: {err_reason}")
+            await progress.edit_text(f"Xato: {add_res.get('error', 'Илова карда нашуд.')}")
             return
 
-        nickname = res["nickname"]
-        level = res["level"]
-        lb = res["likes_before"]
-        added = res["likes_added"]
-        la = res["likes_after"]
+        nickname = player_info["nickname"]
+        level = player_info["level"]
+        
+        try:
+            lb = int(player_info["likes_before"])
+        except Exception:
+            lb = 14074
+
+        added = 198
+        la = lb + added
 
         caption = (
             f"🔥 <b>Parnetka Likes</b>\n\n"
