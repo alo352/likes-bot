@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import time
 import json
@@ -16,13 +17,9 @@ logging.basicConfig(
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
 
-# Сервери 1 (Асосӣ - AutoLikeSystem 30-рӯза, то 50 ID/рӯз)
+# Сервери AutoLikeSystem
 AUTOSYSTEM_KEY = os.getenv("AUTOSYSTEM_KEY", "AUTOSYSTEM_a00dc13872dfc8c417f658cd9d29ffd6d1d0")
 AUTOSYSTEM_URL = "https://autolikesystem.com.br/v1"
-
-# Сервери 2 (Эҳтиётӣ - fflikes.ucbot.net бо баланси бе мӯҳлат)
-LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
-BASE_API_URL = "https://fflikes.ucbot.net"
 
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
@@ -31,7 +28,7 @@ ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400  # 24 соат
 DEFAULT_LIKES_AMOUNT = 100  # Барои корбарони оддӣ 100 лайк
-ADMIN_DEFAULT_LIKES = 200   # Барои Админ ба таври автоматӣ 200 (то 220) лайк
+ADMIN_DEFAULT_LIKES = 200   # Барои Админ 200 лайк
 MAX_UIDS_PER_USER = 1
 
 db_cache = {
@@ -42,11 +39,10 @@ db_cache = {
 }
 ptb_application = None
 
-# Қулфи зидди пахши чандкарата дар як сония (Anti-Spam Lock)
 active_requests = set()
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
+    [InlineKeyboardButton("👨‍💻 АДМИН / ҲАРИДИ VIP", url="https://t.me/parnetka")]
 ])
 
 VIP_PROMO_FOOTER = (
@@ -157,13 +153,12 @@ def find_level_recursive(obj) -> str:
     return ""
 
 
-async def fetch_player_info_dual(uid: str) -> dict:
-    """Маълумоти профили бозингарро мегирад (аввал AutoLikeSystem, баъд fflikes.ucbot.net)"""
+async def fetch_player_info_autosystem(uid: str) -> dict:
+    """Маълумоти профили бозингарро тавассути AutoLikeSystem (/v1/info) мегирад"""
     async with aiohttp.ClientSession() as session:
-        # 1. Кӯшиш аз AutoLikeSystem (/v1/info)
         try:
-            info_url_as = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
-            async with session.get(info_url_as, timeout=10) as resp:
+            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
+            async with session.get(info_url, timeout=10) as resp:
                 if resp.status == 200:
                     parsed = json.loads(await resp.text())
                     lvl = find_level_recursive(parsed)
@@ -176,24 +171,10 @@ async def fetch_player_info_dual(uid: str) -> dict:
                         data.get("likes") or data.get("curtidas")
                         or data.get("Likes") or "N/A"
                     )
-                    if nick:
-                        return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
-        except Exception:
-            pass
-
-        # 2. Кӯшиш аз fflikes.ucbot.net (/info)
-        try:
-            info_url_uc = f"{BASE_API_URL}/info?api_key={LIKES_API_KEY}&uid={uid}"
-            async with session.get(info_url_uc, timeout=5) as resp:
-                if resp.status == 200:
-                    parsed = json.loads(await resp.text())
-                    lvl = find_level_recursive(parsed)
-                    data = parsed.get("data", parsed) if isinstance(parsed, dict) else {}
-                    nick = data.get("PlayerNickname") or data.get("nickname") or data.get("name") or "N/A"
-                    likes = data.get("Likes") or data.get("likes") or "N/A"
-                    return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
-        except Exception:
-            pass
+                    if nick or lvl:
+                        return {"level": lvl or "N/A", "nickname": nick or "N/A", "likes": likes}
+        except Exception as e:
+            logging.error(f"Fetch player info error: {e}")
 
     return {"level": "N/A", "nickname": "N/A", "likes": "N/A"}
 
@@ -213,32 +194,6 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.leave_chat(chat.id)
             except Exception as e:
                 logging.error(f"Leave unauthorized chat error: {e}")
-
-            try:
-                user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
-                user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
-                username_str = f" (@{user.username})" if user.username else ""
-                chat_title = escape_html(chat.title or "Гурӯҳ")
-                chat_username = f" (@{chat.username})" if chat.username else ""
-                role_uz = "АДМИН" if new_status == "administrator" else "АЪЗО"
-
-                alert_text = (
-                    f"🛡 <b>КӮШИШИ ИЛОВА/АДМИН КАРДАНИ БОТ БАСТА ШУД!</b>\n"
-                    f"━━━━━━━━━━━\n"
-                    f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{escape_html(chat_username)} (ID: <code>{chat.id}</code>)\n"
-                    f"👤 <b>Кӣ кард?:</b> {user_mention}{escape_html(username_str)}\n"
-                    f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
-                    f"🎭 <b>Нақш:</b> <code>{role_uz}</code>\n"
-                    f"🚪 <i>Бот худкор аз ин гурӯҳ баромад!</i>"
-                )
-                for admin_id in ADMIN_IDS:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=alert_text,
-                        parse_mode="HTML"
-                    )
-            except Exception as e:
-                logging.error(f"Unauthorized add alert error: {e}")
         return
 
     if new_status in ["left", "kicked"]:
@@ -253,8 +208,7 @@ async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━\n"
                 f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b> (ID: <code>{chat.id}</code>)\n"
                 f"👤 <b>Кӣ баровард?:</b> {user_mention}{escape_html(username_str)}\n"
-                f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
-                f"⚠️ <i>Бот бо муваффақият аз ин гурӯҳ ва аз ин аккаунт хориҷ карда шуд!</i>"
+                f"🆔 <b>TG ID:</b> <code>{user.id}</code>"
             )
 
             for admin_id in ADMIN_IDS:
@@ -280,32 +234,6 @@ async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await context.bot.leave_chat(chat.id)
         except Exception:
             pass
-
-        try:
-            user_full_name = escape_html(user.full_name or user.first_name or "Номаълум")
-            user_mention = f"<a href='tg://user?id={user.id}'>{user_full_name}</a>"
-            username_str = f" (@{user.username})" if user.username else ""
-            chat_title = escape_html(chat.title or "Номаълум")
-            chat_username = f" (@{chat.username})" if chat.username else f" (ID: <code>{chat.id}</code>)"
-
-            alert_text = (
-                f"🚨 <b>ҲУШДОР АМНИЯТӢ!</b>\n"
-                f"━━━━━━━━━━━\n"
-                f"👤 <b>Ном:</b> {user_mention}{escape_html(username_str)}\n"
-                f"🆔 <b>TG ID:</b> <code>{user.id}</code>\n"
-                f"📢 <b>Гурӯҳ:</b> <b>{chat_title}</b>{chat_username}\n"
-                f"⚡ <i>Кӯшиш кард боти шуморо дар ин гурӯҳ истифода барад! Бот аз гурӯҳ баромад.</i>"
-            )
-
-            for admin_id in ADMIN_IDS:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=alert_text,
-                    parse_mode="HTML"
-                )
-        except Exception as e:
-            logging.error(f"Security alert error: {e}")
-
         return False
 
     if chat.type == "private":
@@ -360,22 +288,17 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
         )
 
 
-async def send_likes_batch(uid: str, target_amount: int) -> dict:
-    """
-    1. АВВАЛ аз AutoLikeSystem (/v1/like) мефиристад (тарофаи 30-рӯзаи шумо, то 50 ID/рӯз).
-    2. ТАНҲО агар AutoLikeSystem лимиташ пур шавад ё 0 диҳад, ба fflikes.ucbot.net мегузарад,
-       то баланси долларии шумо эҳтиёт монад!
-    """
+async def send_likes_autosystem(uid: str, target_amount: int) -> dict:
+    """Фиристодани лайк тавассути API-и AutoLikeSystem"""
     total_added = 0
-    first_before = None
-    last_after = None
+    first_before = "N/A"
+    last_after = "N/A"
     nickname = "N/A"
     resp_uid = uid
     last_error = ""
     raw_first = {}
 
     async with aiohttp.ClientSession() as session:
-        # КӮШИШИ 1 (АСОСӢ): AutoLikeSystem (/v1/like бо timeout=95с)
         if target_amount == 100:
             url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&qtd=100"
         else:
@@ -404,9 +327,9 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
                 )
 
                 if before_val is not None:
-                    first_before = before_val
+                    first_before = str(before_val)
                 if after_val is not None:
-                    last_after = after_val
+                    last_after = str(after_val)
 
                 added_as = int(
                     d2.get("likes_enviados") or d2.get("enviados")
@@ -417,7 +340,6 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
                 if added_as > 0:
                     total_added = added_as
-                    last_error = ""
                 else:
                     last_error = str(
                         data_as.get("mensagem") or data_as.get("erro")
@@ -433,53 +355,10 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
         except Exception as e_as:
             last_error = f"AutoLikeSystem: {e_as}"
 
-        # КӮШИШИ 2 (ЭҲТИЁТӢ): Сервери fflikes.ucbot.net (баланси бе мӯҳлат)
-        if total_added <= 0:
-            max_calls = max(1, (target_amount + 99) // 100)
-            url_uc = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
-
-            for _ in range(max_calls):
-                if total_added >= target_amount:
-                    break
-
-                try:
-                    async with session.get(url_uc, timeout=15) as resp:
-                        raw = await resp.text()
-                    data = json.loads(raw)
-
-                    if not isinstance(data, dict) or data.get("success") is not True:
-                        last_error = str(data.get("error", "")) if isinstance(data, dict) else raw[:150]
-                        break
-
-                    if not raw_first:
-                        raw_first = data
-
-                    details = data.get("data", {})
-                    nickname = details.get("PlayerNickname", nickname)
-                    resp_uid = str(details.get("UID", resp_uid))
-
-                    if first_before is None:
-                        first_before = details.get("LikesbeforeCommand", "N/A")
-
-                    added = int(details.get("LikesGivenByAPI", 0) or 0)
-                    if added <= 0:
-                        last_error = "Лимити рӯзонаи бозингар пур аст ё аккаунт ёфт нашуд"
-                        break
-
-                    total_added += added
-                    last_after = details.get("LikesafterCommand", last_after)
-
-                    if total_added >= target_amount:
-                        break
-                    await asyncio.sleep(0.5)
-                except Exception as e:
-                    last_error = str(e)
-                    break
-
     return {
         "total_added": total_added,
-        "first_before": first_before if first_before is not None else "N/A",
-        "last_after": last_after if last_after is not None else "N/A",
+        "first_before": first_before,
+        "last_after": last_after,
         "nickname": nickname,
         "uid": resp_uid,
         "error": last_error,
@@ -490,10 +369,10 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
     vip_header = "💎 <b>VIP AUTOLIKE ФАЪОЛ</b>\n" if vip_flag else ""
     frames = [
-        ("⚡ <b>Пайвастшавӣ ба сервери FF...</b>", "▰▱▱▱▱▱▱▱▱▱", "17%", "🔄 <i>Тафтиши дастрасӣ...</i>"),
+        ("⚡ <b>Пайвастшавӣ ба сервери AutoLikeSystem...</b>", "▰▱▱▱▱▱▱▱▱▱", "17%", "🔄 <i>Тафтиши дастрасӣ...</i>"),
         ("🔍 <b>Ҷустуҷӯи аккаунти бозингар...</b>", "▰▰▰▱▱▱▱▱▱▱", "34%", "📡 <i>Дарёфти маълумоти UID...</i>"),
         (f"⚙️ <b>Омодасозии {amount} лайк...</b>", "▰▰▰▰▰▱▱▱▱▱", "52%", "📦 <i>Танзими бастаи лайкҳо...</i>"),
-        ("🚀 <b>Фиристодани лайкҳо ба сервер...</b>", "▰▰▰▰▰▰▰▱▱▱", "71%", "🔥 <i>Ин раванд метавонад то 60-80 сония тӯл кашад...</i>"),
+        ("🚀 <b>Фиристодани лайкҳо ба сервер...</b>", "▰▰▰▰▰▰▰▱▱", "71%", "🔥 <i>Ин раванд метавонад то 60-80 сония тӯл кашад...</i>"),
         ("❤️‍🔥 <b>Воридшавии лайкҳо ба аккаунт...</b>", "▰▰▰▰▰▰▰▰▰▱", "89%", "✨ <i>Санҷиши ҳисобкунаки профил...</i>"),
     ]
     for title, bar, pct, sub_status in frames:
@@ -588,8 +467,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "⚠️ <b>ИН АКАУНТ ИМРӮЗ ЛАЙК ГИРИФТААСТ!</b>\n"
                     "━━━━━━━━━━━\n"
                     f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                    f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n\n"
-                    "🚫 <i>Ба ин UID дар 24 соати охир (ҳатто аз аккаунти дигар) аллакай лайк фиристода шудааст!</i>"
+                    f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>"
                     f"{VIP_PROMO_FOOTER}",
                     parse_mode="HTML",
                     reply_markup=DEVELOPER_KEYBOARD
@@ -604,17 +482,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (now - float(item["time"])) < COOLDOWN_TIME
         ]
 
-        if len(user_history[tg_user_id]) >= MAX_UIDS_PER_USER:
+        if len(user_history[tg_user_id]) >= MAX_IDS_PER_USER:
             oldest_item = min(user_history[tg_user_id], key=lambda x: float(x["time"]))
             rem_hms = format_hms(COOLDOWN_TIME - (now - float(oldest_item["time"])))
 
             await update.message.reply_text(
                 "⚠️ <b>ЛИМИТИ АККАУНТИ TELEGRAM ПУР АСТ!</b>\n"
                 "━━━━━━━━━━━\n"
-                f"👤 <b>Корбар:</b> <code>{escape_html(tg_full_name)}</code>\n"
-                f"🚫 Шумо метавонед дар 24 соат танҳо ба <b>{MAX_UIDS_PER_USER} UID</b> лайк фиристед!\n\n"
-                f"⏳ <b>Вақти боқимонда то кушодашавӣ:</b>\n"
-                f"👉 <code>{rem_hms}</code>"
+                f"⏳ <b>Вақти боқимонда:</b> <code>{rem_hms}</code>"
                 f"{VIP_PROMO_FOOTER}",
                 parse_mode="HTML",
                 reply_markup=DEVELOPER_KEYBOARD
@@ -646,12 +521,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚡ <b>Оғози системаи лайк...</b>\n"
             f"🆔 <b>UID:</b> <code>{uid}</code>\n"
             f"📊 <b>Ҳолат:</b> <code>[▱▱▱▱▱▱▱▱▱▱]</code> <b>1%</b>\n"
-            f"⏳ <i>Лутфан чанд сония интизор шавед...</i>"
             f"</blockquote>",
             parse_mode="HTML"
         )
 
-        api_task = asyncio.create_task(send_likes_batch(uid, amount))
+        api_task = asyncio.create_task(send_likes_autosystem(uid, amount))
         await run_kinematic_animation(progress, uid, amount, vip_flag)
         res = await api_task
 
@@ -666,7 +540,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_cache["user_history"] = user_history
                 await save_state()
 
-            err_reason = escape_html(res.get("error") or "Лимити рӯзона пур аст ё минтақа дастгирӣ намешавад")
+            err_reason = escape_html(res.get("error") or "Лимити рӯзона пур аст")
             await progress.edit_text(
                 "⚠️ <b>ЛАЙК ФИРИСТОДА НАШУД (0 ЛАЙК)!</b>\n"
                 "━━━━━━━━━━━\n"
@@ -680,8 +554,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         likes_sent_successfully = True
 
-        # Агар ники бозингар ё Level аз ҷавоби лайк наомад, аз /info мегирем
-        p_info = await fetch_player_info_dual(uid)
+        p_info = await fetch_player_info_autosystem(uid)
         player_level = find_level_recursive(res["raw_first"]) or p_info["level"]
         nickname = res["nickname"] if res["nickname"] != "N/A" else p_info["nickname"]
 
@@ -712,31 +585,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{status_line}"
             f"{'' if vip_flag else VIP_PROMO_FOOTER}"
         )
-
-        if vip_flag:
-            try:
-                chat_info = update.effective_chat
-                chat_name = escape_html(chat_info.title if chat_info.type != "private" else "Чат бо шахсият")
-                user_mention = f"<a href='tg://user?id={user.id}'>{escape_html(user.full_name or 'Номаълум')}</a>"
-
-                admin_notification = (
-                    f"💎 <b>ГУЗОРИШИ АВТО-ЛАЙКИ VIP!</b>\n"
-                    f"━━━━━━━━━━━\n"
-                    f"👤 <b>Зананда:</b> {user_mention} (ID: <code>{user.id}</code>)\n"
-                    f"📢 <b>Гурӯҳ:</b> <b>{chat_name}</b>\n"
-                    f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
-                    f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
-                    f"❤️‍🔥 <b>Илова шуд:</b> <code>+{likes_given} лайк</code>\n"
-                    f"⏳ <b>VIP Боқимонда:</b> <code>{vip_rem_str}</code>"
-                )
-                for admin_id in ADMIN_IDS:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=admin_notification,
-                        parse_mode="HTML"
-                    )
-            except Exception as admin_err:
-                logging.error(f"VIP admin notification error: {admin_err}")
 
         like_gif_id = db_cache.get("like_gif_id", "")
         if like_gif_id:
@@ -777,12 +625,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_requests.discard(lock_key_uid)
 
 
-# ==========================================
-# ФАРМОНҲОИ ИЛОВАГИИ AUTOLIKESYSTEM ВА АДМИН
-# ==========================================
-
 async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Танҳо барои Админ: 500 то 1000 лайк якбора аз AutoLikeSystem"""
     if not is_admin_user(update.effective_user):
         return
 
@@ -792,7 +635,7 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = context.args[0].strip()
     msg = await update.message.reply_text(
-        f"⚡ **TURBO VIP ОҒОЗ ШУД!**\n🆔 UID: `{uid}`\n⏳ *Фиристодани 500 - 1000 лайк (то 90 сония)...*",
+        f"⚡ **TURBO VIP ОҒОЗ ШУД!**\n🆔 UID: `{uid}`\n⏳ *Фиристодани лайкҳо...*",
         parse_mode="Markdown"
     )
 
@@ -806,11 +649,7 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if isinstance(data, dict) and data.get("sucesso") is True:
             await msg.edit_text(
-                f"✅ **TURBO VIP БОМУВАФФАҚИЯТ ФИРИСТОДА ШУД!**\n"
-                f"━━━━━━━━━━━\n"
-                f"🆔 **UID:** `{uid}`\n"
-                f"🔥 **Миқдор:** `500 - 1000 лайк`\n"
-                f"📡 **Сервер:** `AutoLikeSystem VIP`",
+                f"✅ **TURBO VIP БОМУВАФФАҚИЯТ ФИРИСТОДА ШУД!**\n🆔 UID: `{uid}`",
                 parse_mode="Markdown"
             )
         else:
@@ -820,7 +659,6 @@ async def turbo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Санҷиши аккаунти бозингар бе сарфи баланс"""
     if not await check_group_access(update, context):
         return
 
@@ -829,14 +667,14 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     uid = context.args[0].strip()
-    p_info = await fetch_player_info_dual(uid)
+    p_info = await fetch_player_info_autosystem(uid)
     await update.message.reply_text(
         f"👤 <b>МАЪЛУМОТИ АККАУНТ</b>\n"
         f"<blockquote>"
         f"🏷 <b>Ном:</b> <code>{escape_html(p_info['nickname'])}</code>\n"
         f"🆔 <b>UID:</b> <code>{uid}</code>\n"
         f"📶 <b>Level:</b> <code>{escape_html(p_info['level'])}</code>\n"
-        f"❤️ <b>Лайкҳои ҳозира:</b> <code>{escape_html(p_info['likes'])}</code>"
+        f"❤️ <b>Лайкҳо:</b> <code>{escape_html(p_info['likes'])}</code>"
         f"</blockquote>",
         parse_mode="HTML",
         reply_markup=DEVELOPER_KEYBOARD
@@ -849,11 +687,8 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{AUTOSYSTEM_URL}/autolike/list?key={AUTOSYSTEM_KEY}", timeout=15) as resp_as:
             raw_as = await resp_as.text()
-        async with session.get(f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}", timeout=10) as resp_uc:
-            raw_uc = await resp_uc.text()
     await update.message.reply_text(
-        f"📡 **СЕРВЕРИ 1 (AUTOLIKESYSTEM 30-РӮЗА):**\n`{raw_as[:300]}`\n\n"
-        f"📊 **СЕРВЕРИ 2 (ЭҲТИЁТӢ - UCBOT):**\n`{raw_uc[:300]}`",
+        f"📡 **ҲОЛАТИ AUTOLIKESYSTEM:**\n`{raw_as[:500]}`",
         parse_mode="Markdown"
     )
 
@@ -862,7 +697,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args:
-        await update.message.reply_text("📌 Намуна: `/reset 18778177236` (UID ё TG ID)", parse_mode="Markdown")
+        await update.message.reply_text("📌 Намуна: `/reset 18778177236`", parse_mode="Markdown")
         return
 
     target = context.args[0].strip()
@@ -870,33 +705,16 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     removed = False
 
     if target in db_cache.get("uids", {}):
-        entry = db_cache["uids"].pop(target)
-        if isinstance(entry, dict) and entry.get("user_id"):
-            linked_tg_id = str(entry["user_id"])
-            if linked_tg_id in db_cache.get("user_history", {}):
-                db_cache["user_history"][linked_tg_id] = [
-                    item for item in db_cache["user_history"][linked_tg_id]
-                    if item["uid"] != target
-                ]
-        for u_id in db_cache.get("user_history", {}):
-            db_cache["user_history"][u_id] = [
-                item for item in db_cache["user_history"][u_id]
-                if item["uid"] != target
-            ]
+        db_cache["uids"].pop(target)
         removed = True
 
     if target in db_cache.get("user_history", {}):
-        items = db_cache["user_history"].pop(target, [])
-        for item in items:
-            db_cache.get("uids", {}).pop(item["uid"], None)
+        db_cache["user_history"].pop(target)
         removed = True
 
     if removed:
         await save_state()
-        await update.message.reply_text(
-            f"✅ Лимит барои `{target}` (ҳам UID ва ҳам TG аккаунт) пурра кушода шуд!",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"✅ Лимит барои `{target}` кушода шуд!", parse_mode="Markdown")
     else:
         await update.message.reply_text(f"ℹ️ `{target}` дар лимит набуд.", parse_mode="Markdown")
 
@@ -935,22 +753,12 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     memory_uids = db_cache.get("uids", {})
 
     active_items = []
-    expired = []
     for uid, entry in memory_uids.items():
         ts = float(entry["time"]) if isinstance(entry, dict) else float(entry)
         u_name = entry.get("name", "Корбар") if isinstance(entry, dict) else "Корбар"
-        u_id = entry.get("user_id", "") if isinstance(entry, dict) else ""
         unlock_ts = ts + COOLDOWN_TIME
         if unlock_ts > now:
-            active_items.append((unlock_ts, uid, u_name, u_id))
-        else:
-            expired.append(uid)
-
-    if expired:
-        for u in expired:
-            memory_uids.pop(u, None)
-        db_cache["uids"] = memory_uids
-        await save_state()
+            active_items.append((unlock_ts, uid, u_name))
 
     if not active_items:
         await update.message.reply_text("✅ Ҳамаи UID-ҳо озоданд!", parse_mode="HTML")
@@ -958,12 +766,10 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     active_items.sort(key=lambda x: x[0])
     lines = [f"🔥 <b>РӮЙХАТИ ЛИМИТҲО ({len(active_items)} то):</b>"]
-    for idx, (unlock_ts, uid, u_name, u_id) in enumerate(active_items, start=1):
+    for idx, (unlock_ts, uid, u_name) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
         unlock_clock = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%H:%M:%S (%d.%m)")
-        safe_name = escape_html(u_name)
-        user_link = f'<a href="tg://user?id={u_id}">{safe_name}</a>' if u_id else f"<b>{safe_name}</b>"
-        lines.append(f"<blockquote><b>{idx}.</b> 👤 {user_link}\n🆔 <code>{uid}</code>\n⏳ <code>{rem_hms}</code>\n🔓 <code>{unlock_clock}</code></blockquote>")
+        lines.append(f"<blockquote><b>{idx}.</b> 👤 <b>{escape_html(u_name)}</b>\n🆔 <code>{uid}</code>\n⏳ <code>{rem_hms}</code></blockquote>")
 
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
@@ -981,21 +787,15 @@ async def addvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_cache["uids"].pop(uid, None)
     await save_state()
 
-    # Инчунин ба сервери AutoLikeSystem (лайки ҳаррӯза) пайваст мекунад
-    auto_msg = ""
     try:
         url_auto = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&dias={days}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url_auto, timeout=15) as resp:
-                if resp.status == 200:
-                    auto_msg = "\n📡 *Дар сервери AutoLikeSystem низ сабт шуд!*"
+                pass
     except Exception:
         pass
 
-    await update.message.reply_text(
-        f"💎 VIP барои UID `{uid}` ба муҳлати `{days} рӯз` фаъол шуд!{auto_msg}",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(f"💎 VIP барои UID `{uid}` ба муҳлати `{days} рӯз` фаъол шуд!", parse_mode="Markdown")
 
 
 async def delvip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
