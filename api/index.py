@@ -39,13 +39,16 @@ ptb_application = None
 active_requests = set()
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
+    [InlineKeyboardButton("👑 ХАРИДИ VIP (200+ LIKE / РӮЗ)", url="https://t.me/parnetka")],
+    [InlineKeyboardButton("👨‍💻 АДМИН • @PARNETKA", url="https://t.me/parnetka")]
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\n💎 <b>МЕХОҲЕД 200+ VIP LIKE ХАРЕД?</b>\n"
-    "⚡️ <i>Бе интизории 24 соат ва бо суръати баланд!</i>\n"
-    "📩 <b>Ба админ муроҷиат кунед:</b> 👉 <b>@parnetka</b>"
+    "\n\n╔══════════════════════╗\n"
+    "💎 <b>VIP ТАРИФ: 200+ LIKE ҲАР РӮЗ!</b>\n"
+    "⚡️ <i>Бе навбат • Бе интизорӣ • Авто-доставка</i>\n"
+    "📩 <b>Фармоиш:</b> 👉 <b>@parnetka</b>\n"
+    "╚══════════════════════╝"
 )
 
 ACCESS_DENIED_TEXT = (
@@ -392,25 +395,27 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
 
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
-    vip_badge = "👑 <b>VIP MODE • ULTRA SPEED</b>\n" if vip_flag else "⚡ <b>PARNETKA ENGINE v2.6</b>\n"
+    vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
     frames = [
-        ("⠋", "Пайвастшавӣ ба сервери Garena...", "▰▱▱▱▱▱▱▱▱▱", "14%", "📡 <i>Тафтиши канали бехатар...</i>"),
-        ("⠙", "Шиносоии аккаунти бозингар...", "▰▰▰▱▱▱▱▱▱▱", "29%", "🔍 <i>Ҷустуҷӯи профил дар база...</i>"),
-        ("⠹", f"Танзими бастаи +{amount} лайк...", "▰▰▰▰▱▱▱▱▱▱", "46%", "⚙️ <i>Омодасозии импульси лайкҳо...</i>"),
-        ("⠸", "Ирсоли мавҷи аввали лайкҳо...", "▰▰▰▰▰▰▱▱▱▱", "64%", "🚀 <i>Суръати интиқол: 100% фаъол...</i>"),
-        ("⠼", "Воридшавӣ ба профили бозӣ...", "▰▰▰▰▰▰▰▰▱▱", "81%", "❤️‍🔥 <i>Лайкҳо ба аккаунт ворид шуданд...</i>"),
-        ("⠴", "Тасдиқи ниҳоии сервер...", "▰▰▰▰▰▰▰▰▰▱", "94%", "✨ <i>Санҷиши натиҷа ва сохтани чек...</i>"),
-        ("🏆", "АМАЛИЁТ БОМУВАФФАҚИЯТ АНҶОМ ЁФТ!", "▰▰▰▰▰▰▰▰▰▰", "100%", "🎉 <i>Омода аст!</i>"),
+        ("⠋", "Пайвастшавӣ ба сервери Garena...", "▰▱▱▱▱▱▱▱▱▱", "12%", "38 ms", "📡 <i>Тафтиши канали бехатари SSL...</i>"),
+        ("⠙", "Шиносоии аккаунти бозингар...", "▰▰▰▱▱▱▱▱▱▱", "26%", "29 ms", "🔍 <i>Ҷустуҷӯи профил дар базаи FF...</i>"),
+        ("⠹", f"Танзими бастаи +{amount} лайк...", "▰▰▰▰▱▱▱▱▱▱", "41%", "24 ms", "⚙️ <i>Омодасозии пакетҳои лайк...</i>"),
+        ("⠸", "Ирсоли мавҷи аввал (Wave 1)...", "▰▰▰▰▰▱▱▱▱▱", "55%", "19 ms", "🚀 <i>Интиқол ба сервер оғоз ёфт...</i>"),
+        ("⠼", "Ирсоли мавҷи дуюм (Wave 2)...", "▰▰▰▰▰▰▰▱▱▱", "69%", "16 ms", "🔥 <i>Суръати фиристодан: MAX BOOST...</i>"),
+        ("⠴", "Воридшавӣ ба профили бозингар...", "▰▰▰▰▰▰▰▰▱▱", "83%", "14 ms", "❤️‍🔥 <i>Лайкҳо ба аккаунт ворид шуданд...</i>"),
+        ("⠦", "Тасдиқи ниҳоии сервер...", "▰▰▰▰▰▰▰▰▰▱", "95%", "12 ms", "✨ <i>Ҳисобкунии натиҷаи пеш ва баъд...</i>"),
+        ("🏆", "АМАЛИЁТ БОМУВАФФАҚИЯТ АНҶОМ ЁФТ!", "▰▰▰▰▰▰▰▰▰▰", "100%", "10 ms", "🎉 <i>Омода кардани баннери натиҷа...</i>"),
     ]
-    for spinner, title, bar, pct, sub_status in frames:
-        await asyncio.sleep(0.65)
+    for spinner, title, bar, pct, ping, sub_status in frames:
+        await asyncio.sleep(0.55)
         try:
             await progress_msg.edit_text(
-                f"{vip_badge}"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"{vip_header}"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"<blockquote>"
                 f"{spinner} <b>{title}</b>\n\n"
-                f"🆔 <b>UID:</b> <code>{uid}</code>  |  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
+                f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
+                f"📶 <b>Сервер:</b> <code>ONLINE ({ping})</code>\n"
                 f"📊 <b>Прогресс:</b> <code>{bar}</code> <b>{pct}</b>\n\n"
                 f"{sub_status}"
                 f"</blockquote>",
@@ -549,13 +554,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        vip_badge = "👑 <b>VIP MODE • ULTRA SPEED</b>\n" if vip_flag else "⚡ <b>PARNETKA ENGINE v2.6</b>\n"
+        vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
         progress = await update.message.reply_text(
-            f"{vip_badge}"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{vip_header}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"<blockquote>"
             f"🔄 <b>Оғози системаи кинематикӣ...</b>\n\n"
-            f"🆔 <b>UID:</b> <code>{uid}</code>  |  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
+            f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
+            f"📶 <b>Сервер:</b> <code>CONNECTING...</code>\n"
             f"📊 <b>Прогресс:</b> <code>▱▱▱▱▱▱▱▱▱▱</code> <b>1%</b>\n\n"
             f"⏳ <i>Лутфан чанд сония интизор шавед...</i>"
             f"</blockquote>",
@@ -598,29 +604,31 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nickname = escape_html(res["nickname"])
         final_uid = escape_html(res["uid"] or uid)
 
-        level_line = f"🏅 <b>Сатҳ (Level):</b> <code>{escape_html(player_level)}</code>\n" if player_level and player_level != "N/A" else ""
+        level_line = f"🏅 <b>Сатҳи бозингар:</b> <code>LVL {escape_html(player_level)}</code>\n" if player_level and player_level != "N/A" else ""
 
         vip_rem_str = ""
         if vip_flag:
             vip_exp_time = float(db_cache["vips"][uid])
             vip_rem_str = format_remaining(vip_exp_time - time.time())
-            header_title = "👑 <b>PARNETKA VIP • BOOST COMPLETE</b>"
-            status_line = f"💎 <b>МАҚОМИ VIP:</b> <code>{vip_rem_str}</code> мондааст"
+            banner_top = "👑 <b>PARNETKA VIP • BOOST COMPLETE</b> 👑"
+            status_line = f"💎 <b>VIP АКТИВ:</b> Боқимонда <code>{vip_rem_str}</code>"
         else:
-            header_title = "🔥 <b>PARNETKA LIKES • МУВАФФАҚИЯТ!</b>"
-            status_line = "⏳ <i>Лайки навбатии ройгон пас аз 24 соат дастрас мешавад!</i>"
+            banner_top = "⚡ <b>PARNETKA LIKES • BOOSTED</b> ⚡"
+            status_line = "⏳ <i>Лайки навбатии ройгон пас аз 24 соат!</i>"
 
         caption_html = (
-            f"{header_title}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{banner_top}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"<blockquote>"
             f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
             f"{level_line}"
             f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
-            f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
-            f"💔 <b>Пеш аз ин:</b> <code>{before_likes}</code>\n"
+            f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
+            f"📊 <b>НАТИҶАИ АФЗОИШИ ЛАЙКҲО:</b>\n"
+            f"💔 <b>Пеш буд:</b> <code>{before_likes}</code>\n"
             f"❤️‍🔥 <b>Илова шуд:</b> <b><code>+{likes_given} LIKE</code></b> 🚀\n"
-            f"🏆 <b>Ҳозира:</b> <code>{before_likes}</code> ➔ <b><code>{after_likes}</code></b> ❤️"
+            f"🏆 <b>Ҳозира шуд:</b> <b><code>{after_likes}</code></b> 🔥\n"
+            f"📈 <b>Тағйирот:</b> <code>{before_likes}</code> ➔ <b><code>{after_likes}</code></b> ❤️"
             f"</blockquote>\n"
             f"{status_line}"
             f"{'' if vip_flag else VIP_PROMO_FOOTER}"
