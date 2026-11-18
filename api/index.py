@@ -117,6 +117,11 @@ def format_hms(seconds_left: float) -> str:
     return f"{hours:02d}ҷ : {minutes:02d}м : {seconds:02d}сон"
 
 
+def format_unlock_clock(unlock_timestamp: float) -> str:
+    tj_tz = timezone(timedelta(hours=5))
+    return datetime.fromtimestamp(unlock_timestamp, tz=tj_tz).strftime("%H:%M:%S (%d.%m.%Y)")
+
+
 def clean_name(name: str) -> str:
     if not name:
         return "Корбар"
@@ -431,7 +436,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) == 1:
-        # Танҳо Админ ба таври автоматӣ 200 лайк мегирад, дигарон 100 лайк
         amount_str = str(ADMIN_DEFAULT_LIKES if admin_flag else DEFAULT_LIKES_AMOUNT)
         uid = context.args[0].strip()
     elif len(context.args) == 2:
@@ -459,13 +463,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     amount = int(amount_str)
     tg_user_id = str(user.id)
 
-    # Қулфи зидди пахши чандкарата дар як вақт (Anti-Spam)
     lock_key_user = f"user_{tg_user_id}"
     lock_key_uid = f"uid_{uid}"
     if lock_key_user in active_requests or lock_key_uid in active_requests:
         return
 
-    # Ҳамаи корбарон (ғайр аз Админ) ТАНҲО 100 лайк зада метавонанд
     if not admin_flag:
         if amount != DEFAULT_LIKES_AMOUNT:
             await update.message.reply_text(
@@ -483,26 +485,30 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши лимити UID-и бозӣ
+        # 1. Санҷиши қатъии лимити UID-и бозӣ
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
             elapsed_uid = now - uid_time
             if elapsed_uid < COOLDOWN_TIME:
-                rem_hms = format_hms(COOLDOWN_TIME - elapsed_uid)
+                unlock_ts = uid_time + COOLDOWN_TIME
+                rem_hms = format_hms(unlock_ts - now)
+                unlock_str = format_unlock_clock(unlock_ts)
                 await update.message.reply_text(
-                    "⚠️ <b>ИН АКАУНТ ИМРӮЗ ЛАЙК ГИРИФТААСТ!</b>\n"
+                    "⚠️ <b>ИН АКАУНТ АЛЛАКАЙ ЛАЙК ГИРИФТААСТ!</b>\n"
                     "━━━━━━━━━━━\n"
                     f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                    f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n\n"
-                    "🚫 <i>Ба ин UID дар 24 соати охир (ҳатто аз аккаунти дигар) аллакай лайк фиристода шудааст!</i>"
+                    f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
+                    f"🔓 <b>Вақти дубора лайк гирифтан:</b>\n"
+                    f"👉 <code>{unlock_str}</code>\n\n"
+                    "🚫 <i>То ба охир расидани ин вақт ба ин UID лайк зада намешавад!</i>"
                     f"{VIP_PROMO_FOOTER}",
                     parse_mode="HTML",
                     reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
-        # 2. Санҷиши лимити аккаунти Telegram
+        # 2. Санҷиши қатъии лимити аккаунти Telegram
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
@@ -513,15 +519,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if len(user_history[tg_user_id]) >= MAX_UIDS_PER_USER:
             oldest_item = min(user_history[tg_user_id], key=lambda x: float(x["time"]))
-            rem_hms = format_hms(COOLDOWN_TIME - (now - float(oldest_item["time"])))
+            unlock_ts = float(oldest_item["time"]) + COOLDOWN_TIME
+            rem_hms = format_hms(unlock_ts - now)
+            unlock_str = format_unlock_clock(unlock_ts)
 
             await update.message.reply_text(
                 "⚠️ <b>ЛИМИТИ АККАУНТИ TELEGRAM ПУР АСТ!</b>\n"
                 "━━━━━━━━━━━\n"
                 f"👤 <b>Корбар:</b> <code>{escape_html(tg_full_name)}</code>\n"
-                f"🚫 Шумо метавонед дар 24 соат танҳо ба <b>{MAX_UIDS_PER_USER} UID</b> лайк фиристед!\n\n"
-                f"⏳ <b>Вақти боқимонда то кушодашавӣ:</b>\n"
-                f"👉 <code>{rem_hms}</code>"
+                f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
+                f"🔓 <b>Вақти дубора лайк гирифтан:</b>\n"
+                f"👉 <code>{unlock_str}</code>\n\n"
+                f"🚫 <i>Шумо дар 24 соат танҳо ба {MAX_UIDS_PER_USER} UID лайк фиристода метавонед!</i>"
                 f"{VIP_PROMO_FOOTER}",
                 parse_mode="HTML",
                 reply_markup=DEVELOPER_KEYBOARD
@@ -534,17 +543,19 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     likes_sent_successfully = False
     like_gif_id = db_cache.get("like_gif_id", "")
     has_gif = bool(like_gif_id)
+    lock_start_time = time.time()
 
     try:
-        if not admin_flag and not vip_flag:
-            user_history[tg_user_id].append({"uid": uid, "time": now})
+        if not vip_flag:
             memory_uids[uid] = {
-                "time": now,
+                "time": lock_start_time,
                 "user_id": tg_user_id,
                 "name": tg_full_name
             }
             db_cache["uids"] = memory_uids
-            db_cache["user_history"] = user_history
+            if not admin_flag:
+                user_history[tg_user_id].append({"uid": uid, "time": lock_start_time})
+                db_cache["user_history"] = user_history
             await save_state()
 
         badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡ <b>PARNETKA ENGINE</b>"
@@ -571,22 +582,27 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         res = await api_task
 
         if res["total_added"] <= 0:
-            if not admin_flag and not vip_flag:
-                user_history[tg_user_id] = [
-                    item for item in user_history.get(tg_user_id, [])
-                    if item["uid"] != uid
-                ]
-                db_cache["user_history"] = user_history
+            if not vip_flag:
+                memory_uids.pop(uid, None)
+                db_cache["uids"] = memory_uids
+                if not admin_flag:
+                    user_history[tg_user_id] = [
+                        item for item in user_history.get(tg_user_id, [])
+                        if item["uid"] != uid
+                    ]
+                    db_cache["user_history"] = user_history
                 await save_state()
 
+            unlock_ts = time.time() + COOLDOWN_TIME
             rem_hms = format_hms(COOLDOWN_TIME)
+            unlock_str = format_unlock_clock(unlock_ts)
             err_text = (
                 "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ!</b>\n"
                 "━━━━━━━━━━━\n"
                 f"🆔 <b>UID:</b> <code>{uid}</code>\n"
                 f"🚫 <i>Ин аккаунт аллакай дар сервер лайк гирифтааст.</i>\n\n"
-                f"⏳ <b>Боқимонда то кушодашавӣ:</b>\n"
-                f"👉 <code>{rem_hms}</code>"
+                f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
+                f"🔓 <b>Вақти кушодашавӣ:</b> <code>{unlock_str}</code>"
                 f"{VIP_PROMO_FOOTER}"
             )
             if has_gif:
@@ -600,6 +616,22 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         likes_sent_successfully = True
+        completed_now = time.time()
+
+        # Сабти вақти дақиқи анҷоми лайк дар база
+        if not vip_flag:
+            memory_uids[uid] = {
+                "time": completed_now,
+                "user_id": tg_user_id,
+                "name": tg_full_name
+            }
+            db_cache["uids"] = memory_uids
+            if not admin_flag:
+                for item in user_history.get(tg_user_id, []):
+                    if item["uid"] == uid:
+                        item["time"] = completed_now
+                db_cache["user_history"] = user_history
+            await save_state()
 
         player_level = find_level_recursive(res["raw_first"]) or await fetch_player_level(uid)
         likes_given = res["total_added"]
@@ -613,12 +645,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vip_rem_str = ""
         if vip_flag:
             vip_exp_time = float(db_cache["vips"][uid])
-            vip_rem_str = format_remaining(vip_exp_time - time.time())
+            vip_rem_str = format_remaining(vip_exp_time - completed_now)
             banner_top = "👑 <b>PARNETKA VIP • BOOST COMPLETE</b> 👑"
             status_line = f"💎 <b>VIP АКТИВ:</b> Боқимонда <code>{vip_rem_str}</code>"
         else:
+            unlock_ts = completed_now + COOLDOWN_TIME
+            rem_hms = format_hms(unlock_ts - time.time())
+            unlock_str = format_unlock_clock(unlock_ts)
             banner_top = "⚡ <b>PARNETKA LIKES • BOOSTED</b> ⚡"
-            status_line = "⏳ <i>Лайки навбатии ройгон пас аз 24 соат!</i>"
+            status_line = (
+                f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
+                f"🔓 <b>Лайки навбатӣ:</b> <code>{unlock_str}</code>"
+            )
 
         caption_html = (
             f"{banner_top}\n"
@@ -673,14 +711,15 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     except Exception as e:
-        if not likes_sent_successfully and not admin_flag and not vip_flag:
+        if not likes_sent_successfully and not vip_flag:
             memory_uids.pop(uid, None)
-            user_history[tg_user_id] = [
-                item for item in user_history.get(tg_user_id, [])
-                if item["uid"] != uid
-            ]
             db_cache["uids"] = memory_uids
-            db_cache["user_history"] = user_history
+            if not admin_flag:
+                user_history[tg_user_id] = [
+                    item for item in user_history.get(tg_user_id, [])
+                    if item["uid"] != uid
+                ]
+                db_cache["user_history"] = user_history
             await save_state()
         logging.error(f"/like error: {e}")
         try:
@@ -766,8 +805,13 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         entry = memory_uids[target]
         ts = float(entry["time"]) if isinstance(entry, dict) else float(entry)
         if (now - ts) < COOLDOWN_TIME:
-            rem = format_remaining(COOLDOWN_TIME - (now - ts))
-            await update.message.reply_text(f"⏳ UID `{target}` дар лимит аст. Боқимонда: `{rem}`", parse_mode="Markdown")
+            unlock_ts = ts + COOLDOWN_TIME
+            rem = format_hms(unlock_ts - now)
+            unlock_str = format_unlock_clock(unlock_ts)
+            await update.message.reply_text(
+                f"⏳ UID `{target}` дар лимит аст.\nБоқимонда: `{rem}`\nКушодашавӣ: `{unlock_str}`",
+                parse_mode="Markdown"
+            )
             return
     await update.message.reply_text(f"✅ UID `{target}` озод аст.", parse_mode="Markdown")
 
@@ -777,7 +821,6 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await load_state()
     now = time.time()
-    tj_tz = timezone(timedelta(hours=5))
     memory_uids = db_cache.get("uids", {})
 
     active_items = []
@@ -806,7 +849,7 @@ async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = [f"🔥 <b>РӮЙХАТИ ЛИМИТҲО ({len(active_items)} то):</b>"]
     for idx, (unlock_ts, uid, u_name, u_id) in enumerate(active_items, start=1):
         rem_hms = format_hms(unlock_ts - now)
-        unlock_clock = datetime.fromtimestamp(unlock_ts, tz=tj_tz).strftime("%H:%M:%S (%d.%m)")
+        unlock_clock = format_unlock_clock(unlock_ts)
         safe_name = escape_html(u_name)
         user_link = f'<a href="tg://user?id={u_id}">{safe_name}</a>' if u_id else f"<b>{safe_name}</b>"
         lines.append(f"<blockquote><b>{idx}.</b> 👤 {user_link}\n🆔 <code>{uid}</code>\n⏳ <code>{rem_hms}</code>\n🔓 <code>{unlock_clock}</code></blockquote>")
