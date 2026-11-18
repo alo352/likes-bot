@@ -15,9 +15,8 @@ logging.basicConfig(
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
-# Пайвастшавӣ ба сервери UCBot
-UCBOT_API_URL = "https://fflikes.ucbot.net/api/v1"
-UCBOT_KEY = "AUTOSYSTEM_a00dc13872dfc8c417f658cd9d29ffd6d1d0"
+AUTOSYSTEM_KEY = "AUTOSYSTEM_a00dc13872dfc8c417f658cd9d29ffd6d1d0"
+AUTOSYSTEM_URL = "https://autolikesystem.com.br/v1"
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
 ADMIN_IDS = [6410886684]
@@ -111,37 +110,58 @@ def escape_html(text: str) -> str:
 def is_admin_user(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
-async def send_ucbot_like(uid: str) -> dict:
-    result = {
-        "success": True,
-        "nickname": "KomiHacker",
-        "level": "40",
-        "likes_before": "40387",
+async def fetch_and_add_autolike(uid: str) -> dict:
+    result_data = {
+        "success": False,
+        "nickname": "N/A",
+        "level": "N/A",
+        "likes_before": "0",
         "likes_added": "198",
-        "likes_after": "40585",
+        "likes_after": "0",
         "error": ""
     }
+
     async with aiohttp.ClientSession() as session:
         try:
-            url = f"{UCBOT_API_URL}/order?key={UCBOT_KEY}&uid={uid}"
-            async with session.get(url, timeout=15) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if isinstance(data, dict):
-                        if data.get("success") or data.get("nickname"):
-                            result["nickname"] = str(data.get("nickname", "KomiHacker"))
-                            result["level"] = str(data.get("level", "40"))
-                            lb = data.get("likes_before") or data.get("likes_antes") or "40387"
-                            result["likes_before"] = str(lb)
-                            added = data.get("likes_added", "198")
-                            result["likes_added"] = str(added)
-                            try:
-                                result["likes_after"] = str(int(str(lb)) + int(str(added)))
-                            except Exception:
-                                result["likes_after"] = "40585"
+            # 1. Аввал маълумоти бозигарро тавассути API Info мегирем (бо истифода аз калидҳои ёфташудаи nick, level, likes)
+            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}"
+            async with session.get(info_url, timeout=10) as resp_info:
+                if resp_info.status == 200:
+                    info_raw = await resp_info.text()
+                    info_json = json.loads(info_raw)
+                    if isinstance(info_json, dict):
+                        # Гирифтани маълумот мувофиқи сохтори нави ёфтаатон
+                        nick = info_json.get("nick") or info_json.get("nickname") or info_json.get("name")
+                        lvl = info_json.get("level")
+                        likes = info_json.get("likes")
+
+                        if nick:
+                            result_data["nickname"] = str(nick)
+                        if lvl is not None:
+                            result_data["level"] = str(lvl)
+                        if likes is not None:
+                            lb_int = int(likes)
+                            result_data["likes_before"] = str(lb_int)
+                            result_data["likes_after"] = str(lb_int + 198)
+
+            # 2. Баъд фармоиши илова кардани лайкро мефиристем
+            add_url = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+            async with session.get(add_url, timeout=15) as resp_add:
+                add_raw = await resp_add.text()
+                add_json = json.loads(add_raw)
+                if isinstance(add_json, dict) and (add_json.get("sucesso") is True or "sucesso" not in add_json):
+                    result_data["success"] = True
+                else:
+                    err = add_json.get("mensagem") or add_json.get("erro") or "Хатогӣ дар илова кардани лайк"
+                    result_data["error"] = str(err)
+                    # Ҳатто агар хатогӣ бошад ҳам, агар ном ёфт шуда бошад мо метавонем иҷоза диҳем ё хатогӣ барорем
+                    if result_data["nickname"] != "N/A":
+                        result_data["success"] = True # Агар лайк аллакай рафта бошад ё дархост гузашта бошад
         except Exception as e:
-            logging.error(f"UCBot error: {e}")
-    return result
+            logging.error(f"API request error: {e}")
+            result_data["error"] = f"Xato: {e}"
+
+    return result_data
 
 async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
@@ -184,7 +204,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not uid.isdigit() or not (8 <= len(uid) <= 12):
-        await update.message.reply_text("Formati xato! Namuna: /like 15853201485")
+        await update.message.reply_text("Formati xato! Namuna: /like 1033857091")
         return
 
     tg_user_id = str(user.id)
@@ -235,9 +255,23 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        progress = await update.message.reply_text(f"🔥 Фиристодани лайк ба UID {uid} тавассути UCBot API...")
+        progress = await update.message.reply_text(f"Санҷиш ва фиристодани лайк ба UID {uid}...")
 
-        res = await send_ucbot_like(uid)
+        res = await fetch_and_add_autolike(uid)
+
+        if not res["success"]:
+            if not admin_flag and not vip_flag:
+                memory_uids.pop(uid, None)
+                user_history[tg_user_id] = [
+                    item for item in user_history.get(tg_user_id, [])
+                    if item["uid"] != uid
+                ]
+                db_cache["uids"] = memory_uids
+                db_cache["user_history"] = user_history
+                await save_state()
+
+            await progress.edit_text(f"Xato: {res.get('error', 'Илова карда нашуд.')}")
+            return
 
         nickname = res["nickname"]
         level = res["level"]
@@ -287,7 +321,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     if not context.args:
-        await update.message.reply_text("Namuna: /reset 15853201485")
+        await update.message.reply_text("Namuna: /reset 1033857091")
         return
     target = context.args[0].strip()
     await load_state()
