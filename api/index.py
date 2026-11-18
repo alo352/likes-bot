@@ -289,7 +289,7 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def send_likes_autosystem(uid: str, target_amount: int) -> dict:
-    """Фиристодани лайк тавассути API-и AutoLikeSystem"""
+    """Фиристодани лайк тавассути API-и AutoLikeSystem бо системаи такроркунии худкор (Retry)"""
     total_added = 0
     first_before = "N/A"
     last_after = "N/A"
@@ -298,62 +298,76 @@ async def send_likes_autosystem(uid: str, target_amount: int) -> dict:
     last_error = ""
     raw_first = {}
 
+    max_retries = 3  # Чанд маротиба кӯшиш кардан
+    retry_delay = 3  # Сония байни кӯшишҳо
+
     async with aiohttp.ClientSession() as session:
         if target_amount == 100:
             url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}&qtd=100"
         else:
             url_as = f"{AUTOSYSTEM_URL}/like?key={AUTOSYSTEM_KEY}&uid={uid}"
 
-        try:
-            timeout_cfg = aiohttp.ClientTimeout(total=95)
-            async with session.get(url_as, timeout=timeout_cfg) as resp_as:
-                raw_as = await resp_as.text()
-            data_as = json.loads(raw_as)
+        for attempt in range(1, max_retries + 1):
+            try:
+                timeout_cfg = aiohttp.ClientTimeout(total=95)
+                async with session.get(url_as, timeout=timeout_cfg) as resp_as:
+                    raw_as = await resp_as.text()
+                data_as = json.loads(raw_as)
 
-            if isinstance(data_as, dict) and data_as.get("sucesso") is True:
-                raw_first = data_as
-                d2 = data_as.get("data", data_as)
-                nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
+                if isinstance(data_as, dict) and data_as.get("sucesso") is True:
+                    raw_first = data_as
+                    d2 = data_as.get("data", data_as)
+                    nickname = d2.get("nick") or d2.get("nickname") or d2.get("nome") or nickname
 
-                before_val = (
-                    d2.get("likes_antes") if d2.get("likes_antes") is not None
-                    else d2.get("antes") if d2.get("antes") is not None
-                    else d2.get("likes_before")
-                )
-                after_val = (
-                    d2.get("likes_depois") if d2.get("likes_depois") is not None
-                    else d2.get("depois") if d2.get("depois") is not None
-                    else d2.get("likes_after")
-                )
-
-                if before_val is not None:
-                    first_before = str(before_val)
-                if after_val is not None:
-                    last_after = str(after_val)
-
-                added_as = int(
-                    d2.get("likes_enviados") or d2.get("enviados")
-                    or d2.get("likes_sent") or d2.get("added") or 0
-                )
-                if added_as <= 0 and isinstance(before_val, int) and isinstance(after_val, int) and after_val > before_val:
-                    added_as = after_val - before_val
-
-                if added_as > 0:
-                    total_added = added_as
-                else:
-                    last_error = str(
-                        data_as.get("mensagem") or data_as.get("erro")
-                        or data_as.get("message") or "AutoLikeSystem: 0 лайк"
+                    before_val = (
+                        d2.get("likes_antes") if d2.get("likes_antes") is not None
+                        else d2.get("antes") if d2.get("antes") is not None
+                        else d2.get("likes_before")
                     )
-            else:
-                last_error = str(
-                    data_as.get("mensagem") or data_as.get("erro")
-                    or data_as.get("message") or raw_as[:150]
-                )
-        except asyncio.TimeoutError:
-            last_error = "AutoLikeSystem: вақти интизорӣ (95с) тамом шуд"
-        except Exception as e_as:
-            last_error = f"AutoLikeSystem: {e_as}"
+                    after_val = (
+                        d2.get("likes_depois") if d2.get("likes_depois") is not None
+                        else d2.get("depois") if d2.get("depois") is not None
+                        else d2.get("likes_after")
+                    )
+
+                    if before_val is not None:
+                        first_before = str(before_val)
+                    if after_val is not None:
+                        last_after = str(after_val)
+
+                    added_as = int(
+                        d2.get("likes_enviados") or d2.get("enviados")
+                        or d2.get("likes_sent") or d2.get("added") or 0
+                    )
+                    if added_as <= 0 and isinstance(before_val, int) and isinstance(after_val, int) and after_val > before_val:
+                        added_as = after_val - before_val
+
+                    if added_as > 0:
+                        total_added = added_as
+                        last_error = ""
+                        break
+                    else:
+                        last_error = str(
+                            data_as.get("mensagem") or data_as.get("erro")
+                            or data_as.get("message") or "AutoLikeSystem: 0 лайк"
+                        )
+                else:
+                    err_msg = str(
+                        data_as.get("mensagem") or data_as.get("erro")
+                        or data_as.get("message") or raw_as[:150]
+                    )
+                    last_error = err_msg
+                    if "sobrecarregado" in err_msg.lower() or "busy" in err_msg.lower():
+                        if attempt < max_retries:
+                            await asyncio.sleep(retry_delay)
+                            continue
+            except asyncio.TimeoutError:
+                last_error = "AutoLikeSystem: вақти интизорӣ (95с) тамом шуд"
+            except Exception as e_as:
+                last_error = f"AutoLikeSystem: {e_as}"
+
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
 
     return {
         "total_added": total_added,
