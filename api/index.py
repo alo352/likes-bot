@@ -392,29 +392,20 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
 
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False, has_gif: bool = False):
-    vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
+    badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡ <b>PARNETKA ENGINE</b>"
     frames = [
-        ("⠋", "Пайвастшавӣ ба сервери Garena...", "▰▱▱▱▱▱▱▱▱▱", "12%", "38 ms", "📡 <i>Тафтиши канали бехатари SSL...</i>"),
-        ("⠙", "Шиносоии аккаунти бозингар...", "▰▰▰▱▱▱▱▱▱▱", "26%", "29 ms", "🔍 <i>Ҷустуҷӯи профил дар базаи FF...</i>"),
-        ("⠹", f"Танзими бастаи +{amount} лайк...", "▰▰▰▰▱▱▱▱▱▱", "41%", "24 ms", "⚙️ <i>Омодасозии пакетҳои лайк...</i>"),
-        ("⠸", "Ирсоли мавҷи аввал (Wave 1)...", "▰▰▰▰▰▱▱▱▱▱", "55%", "19 ms", "🚀 <i>Интиқол ба сервер оғоз ёфт...</i>"),
-        ("⠼", "Ирсоли мавҷи дуюм (Wave 2)...", "▰▰▰▰▰▰▰▱▱▱", "69%", "16 ms", "🔥 <i>Суръати фиристодан: MAX BOOST...</i>"),
-        ("⠴", "Воридшавӣ ба профили бозингар...", "▰▰▰▰▰▰▰▰▱▱", "83%", "14 ms", "❤️‍🔥 <i>Лайкҳо ба аккаунт ворид шуданд...</i>"),
-        ("⠦", "Тасдиқи ниҳоии сервер...", "▰▰▰▰▰▰▰▰▰▱", "95%", "12 ms", "✨ <i>Ҳисобкунии натиҷаи пеш ва баъд...</i>"),
-        ("🏆", "АМАЛИЁТ БОМУВАФФАҚИЯТ АНҶОМ ЁФТ!", "▰▰▰▰▰▰▰▰▰▰", "100%", "10 ms", "🎉 <i>Омода кардани баннери натиҷа...</i>"),
+        ("⠋", "Пайвастшавӣ ба сервер...", "▰▱▱▱▱▱▱▱", "14%"),
+        ("⠙", "Санҷиши профили UID...", "▰▰▰▱▱▱▱▱", "32%"),
+        ("⠹", f"Омодасозии +{amount} лайк...", "▰▰▰▰▰▱▱▱", "58%"),
+        ("⠸", "Фиристодани лайкҳо...", "▰▰▰▰▰▰▰▱", "84%"),
+        ("🏆", "Анҷом ёфт! Натиҷа...", "▰▰▰▰▰▰▰▰", "100%"),
     ]
-    for spinner, title, bar, pct, ping, sub_status in frames:
+    for spinner, status, bar, pct in frames:
         await asyncio.sleep(0.55)
         frame_text = (
-            f"{vip_header}"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<blockquote>"
-            f"{spinner} <b>{title}</b>\n\n"
-            f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
-            f"📶 <b>Сервер:</b> <code>ONLINE ({ping})</code>\n"
-            f"📊 <b>Прогресс:</b> <code>{bar}</code> <b>{pct}</b>\n\n"
-            f"{sub_status}"
-            f"</blockquote>"
+            f"{badge} • <code>{uid}</code>\n"
+            f"<blockquote>{spinner} <b>{status}</b>\n"
+            f"<code>[{bar}]</code> <b>{pct}</b> • <code>+{amount} ❤️</code></blockquote>"
         )
         try:
             if has_gif:
@@ -556,17 +547,11 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
+        badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡ <b>PARNETKA ENGINE</b>"
         start_text = (
-            f"{vip_header}"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<blockquote>"
-            f"🔄 <b>Оғози системаи кинематикӣ...</b>\n\n"
-            f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
-            f"📶 <b>Сервер:</b> <code>CONNECTING...</code>\n"
-            f"📊 <b>Прогресс:</b> <code>▱▱▱▱▱▱▱▱▱▱</code> <b>1%</b>\n\n"
-            f"⏳ <i>Лутфан чанд сония интизор шавед...</i>"
-            f"</blockquote>"
+            f"{badge} • <code>{uid}</code>\n"
+            f"<blockquote>🔄 <b>Оғози санҷиш...</b>\n"
+            f"<code>[▱▱▱▱▱▱▱▱]</code> <b>1%</b> • <code>+{amount} ❤️</code></blockquote>"
         )
 
         if has_gif:
@@ -635,7 +620,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             banner_top = "⚡ <b>PARNETKA LIKES • BOOSTED</b> ⚡"
             status_line = "⏳ <i>Лайки навбатии ройгон пас аз 24 соат!</i>"
 
-        # Бе хати «Тағйирот» ва бе навиштаҷоти VIP-и поёнӣ
         caption_html = (
             f"{banner_top}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
