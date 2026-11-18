@@ -569,7 +569,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"</blockquote>"
         )
 
-        # Ҳам бо GIF ва ҳам бе GIF дар як паём мебарояд ва дар ҷояш таҳрир мешавад!
         if has_gif:
             progress = await update.message.reply_animation(
                 animation=like_gif_id,
@@ -636,6 +635,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             banner_top = "⚡ <b>PARNETKA LIKES • BOOSTED</b> ⚡"
             status_line = "⏳ <i>Лайки навбатии ройгон пас аз 24 соат!</i>"
 
+        # Бе хати «Тағйирот» ва бе навиштаҷоти VIP-и поёнӣ
         caption_html = (
             f"{banner_top}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -647,11 +647,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 <b>НАТИҶАИ АФЗОИШИ ЛАЙКҲО:</b>\n"
             f"💔 <b>Пеш буд:</b> <code>{before_likes}</code>\n"
             f"❤️‍🔥 <b>Илова шуд:</b> <b><code>+{likes_given} LIKE</code></b> 🚀\n"
-            f"🏆 <b>Ҳозира шуд:</b> <b><code>{after_likes}</code></b> 🔥\n"
-            f"📈 <b>Тағйирот:</b> <code>{before_likes}</code> ➔ <b><code>{after_likes}</code></b> ❤️"
+            f"🏆 <b>Ҳозира шуд:</b> <b><code>{after_likes}</code></b> 🔥"
             f"</blockquote>\n"
             f"{status_line}"
-            f"{'' if vip_flag else VIP_PROMO_FOOTER}"
         )
 
         if vip_flag:
@@ -679,7 +677,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as admin_err:
                 logging.error(f"VIP admin notification error: {admin_err}")
 
-        # Дар ҳамон ҷо бе кнопкаи VIP таҳрир мешавад!
         if has_gif:
             await progress.edit_caption(
                 caption=caption_html,
