@@ -39,16 +39,13 @@ ptb_application = None
 active_requests = set()
 
 DEVELOPER_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("👑 ХАРИДИ VIP (200+ LIKE / РӮЗ)", url="https://t.me/parnetka")],
-    [InlineKeyboardButton("👨‍💻 АДМИН • @PARNETKA", url="https://t.me/parnetka")]
+    [InlineKeyboardButton("👨‍💻 АДМИН / ХАРИДИ VIP", url="https://t.me/parnetka")]
 ])
 
 VIP_PROMO_FOOTER = (
-    "\n\n╔══════════════════════╗\n"
-    "💎 <b>VIP ТАРИФ: 200+ LIKE ҲАР РӮЗ!</b>\n"
-    "⚡️ <i>Бе навбат • Бе интизорӣ • Авто-доставка</i>\n"
-    "📩 <b>Фармоиш:</b> 👉 <b>@parnetka</b>\n"
-    "╚══════════════════════╝"
+    "\n\n💎 <b>МЕХОҲЕД 200+ VIP LIKE ХАРЕД?</b>\n"
+    "⚡️ <i>Бе интизории 24 соат ва бо суръати баланд!</i>\n"
+    "📩 <b>Ба админ муроҷиат кунед:</b> 👉 <b>@parnetka</b>"
 )
 
 ACCESS_DENIED_TEXT = (
@@ -394,7 +391,7 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
     }
 
 
-async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False):
+async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False, has_gif: bool = False):
     vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
     frames = [
         ("⠋", "Пайвастшавӣ ба сервери Garena...", "▰▱▱▱▱▱▱▱▱▱", "12%", "38 ms", "📡 <i>Тафтиши канали бехатари SSL...</i>"),
@@ -408,19 +405,22 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag:
     ]
     for spinner, title, bar, pct, ping, sub_status in frames:
         await asyncio.sleep(0.55)
+        frame_text = (
+            f"{vip_header}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<blockquote>"
+            f"{spinner} <b>{title}</b>\n\n"
+            f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
+            f"📶 <b>Сервер:</b> <code>ONLINE ({ping})</code>\n"
+            f"📊 <b>Прогресс:</b> <code>{bar}</code> <b>{pct}</b>\n\n"
+            f"{sub_status}"
+            f"</blockquote>"
+        )
         try:
-            await progress_msg.edit_text(
-                f"{vip_header}"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<blockquote>"
-                f"{spinner} <b>{title}</b>\n\n"
-                f"🆔 <b>UID:</b> <code>{uid}</code>  •  🎯 <b>Ҳадаф:</b> <code>+{amount} ❤️</code>\n"
-                f"📶 <b>Сервер:</b> <code>ONLINE ({ping})</code>\n"
-                f"📊 <b>Прогресс:</b> <code>{bar}</code> <b>{pct}</b>\n\n"
-                f"{sub_status}"
-                f"</blockquote>",
-                parse_mode="HTML"
-            )
+            if has_gif:
+                await progress_msg.edit_caption(caption=frame_text, parse_mode="HTML")
+            else:
+                await progress_msg.edit_text(text=frame_text, parse_mode="HTML")
         except Exception:
             pass
 
@@ -541,6 +541,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_requests.add(lock_key_uid)
 
     likes_sent_successfully = False
+    like_gif_id = db_cache.get("like_gif_id", "")
+    has_gif = bool(like_gif_id)
 
     try:
         if not admin_flag and not vip_flag:
@@ -555,7 +557,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_state()
 
         vip_header = "👑 <b>PARNETKA VIP • TURBO ENGINE</b>\n" if vip_flag else "⚡ <b>PARNETKA SYSTEM • PRO ENGINE</b>\n"
-        progress = await update.message.reply_text(
+        start_text = (
             f"{vip_header}"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"<blockquote>"
@@ -564,12 +566,24 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📶 <b>Сервер:</b> <code>CONNECTING...</code>\n"
             f"📊 <b>Прогресс:</b> <code>▱▱▱▱▱▱▱▱▱▱</code> <b>1%</b>\n\n"
             f"⏳ <i>Лутфан чанд сония интизор шавед...</i>"
-            f"</blockquote>",
-            parse_mode="HTML"
+            f"</blockquote>"
         )
 
+        # Ҳам бо GIF ва ҳам бе GIF дар як паём мебарояд ва дар ҷояш таҳрир мешавад!
+        if has_gif:
+            progress = await update.message.reply_animation(
+                animation=like_gif_id,
+                caption=start_text,
+                parse_mode="HTML"
+            )
+        else:
+            progress = await update.message.reply_text(
+                text=start_text,
+                parse_mode="HTML"
+            )
+
         api_task = asyncio.create_task(send_likes_batch(uid, amount))
-        await run_kinematic_animation(progress, uid, amount, vip_flag)
+        await run_kinematic_animation(progress, uid, amount, vip_flag, has_gif)
         res = await api_task
 
         if res["total_added"] <= 0:
@@ -582,17 +596,23 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await save_state()
 
             rem_hms = format_hms(COOLDOWN_TIME)
-            await progress.edit_text(
+            err_text = (
                 "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ!</b>\n"
                 "━━━━━━━━━━━\n"
                 f"🆔 <b>UID:</b> <code>{uid}</code>\n"
                 f"🚫 <i>Ин аккаунт аллакай дар сервер лайк гирифтааст.</i>\n\n"
                 f"⏳ <b>Боқимонда то кушодашавӣ:</b>\n"
                 f"👉 <code>{rem_hms}</code>"
-                f"{VIP_PROMO_FOOTER}",
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
+                f"{VIP_PROMO_FOOTER}"
             )
+            if has_gif:
+                try:
+                    await progress.delete()
+                except Exception:
+                    pass
+                await update.message.reply_text(err_text, parse_mode="HTML", reply_markup=DEVELOPER_KEYBOARD)
+            else:
+                await progress.edit_text(err_text, parse_mode="HTML", reply_markup=DEVELOPER_KEYBOARD)
             return
 
         likes_sent_successfully = True
@@ -659,23 +679,16 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as admin_err:
                 logging.error(f"VIP admin notification error: {admin_err}")
 
-        like_gif_id = db_cache.get("like_gif_id", "")
-        if like_gif_id:
-            try:
-                await progress.delete()
-            except Exception:
-                pass
-            await update.message.reply_animation(
-                animation=like_gif_id,
+        # Дар ҳамон ҷо бе кнопкаи VIP таҳрир мешавад!
+        if has_gif:
+            await progress.edit_caption(
                 caption=caption_html,
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
+                parse_mode="HTML"
             )
         else:
             await progress.edit_text(
-                caption_html,
-                parse_mode="HTML",
-                reply_markup=DEVELOPER_KEYBOARD
+                text=caption_html,
+                parse_mode="HTML"
             )
 
     except Exception as e:
@@ -690,7 +703,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_state()
         logging.error(f"/like error: {e}")
         try:
-            await progress.edit_text("❌ **Хатогии сервер!**", parse_mode="Markdown")
+            if has_gif:
+                await progress.edit_caption(caption="❌ **Хатогии сервер!**", parse_mode="Markdown")
+            else:
+                await progress.edit_text("❌ **Хатогии сервер!**", parse_mode="Markdown")
         except Exception:
             pass
     finally:
