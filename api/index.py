@@ -110,76 +110,79 @@ def escape_html(text: str) -> str:
 def is_admin_user(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
-def find_level_recursive(obj) -> str:
+def find_info_recursive(obj, keys):
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level", "nivel") and v is not None:
+            if k.lower() in keys and v is not None:
                 val_str = str(v).strip()
-                if val_str.isdigit():
+                if val_str:
                     return val_str
         for v in obj.values():
-            res = find_level_recursive(v)
+            res = find_info_recursive(v, keys)
             if res:
                 return res
     elif isinstance(obj, list):
         for item in obj:
-            res = find_level_recursive(item)
+            res = find_info_recursive(item, keys)
             if res:
                 return res
     return ""
 
-async def fetch_player_info(uid: str) -> dict:
-    async with aiohttp.ClientSession() as session:
-        try:
-            info_url = f"{AUTOSYSTEM_URL}/info?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
-            async with session.get(info_url, timeout=10) as resp:
-                if resp.status == 200:
-                    raw_text = await resp.text()
-                    parsed = json.loads(raw_text)
-                    lvl = find_level_recursive(parsed)
-                    data = parsed.get("data", parsed) if isinstance(parsed, dict) else {}
-                    nick = (
-                        data.get("nickname") or data.get("nick") or data.get("nome")
-                        or data.get("PlayerNickname") or data.get("name") or data.get("player_name") or "N/A"
-                    )
-                    likes = (
-                        data.get("likes") or data.get("curtidas")
-                        or data.get("Likes") or data.get("likes_antes") or "N/A"
-                    )
-                    return {"level": lvl or "N/A", "nickname": nick, "likes": likes}
-        except Exception as e:
-            logging.error(f"Fetch player info error: {e}")
-    return {"level": "N/A", "nickname": "N/A", "likes": "N/A"}
-
-async def add_autolike_id(uid: str) -> dict:
-    last_error = ""
-    success = False
+async def add_and_fetch_autolike(uid: str) -> dict:
+    result_data = {
+        "success": False,
+        "nickname": "N/A",
+        "level": "N/A",
+        "likes_before": "0",
+        "likes_added": "198",
+        "likes_after": "0",
+        "error": ""
+    }
 
     async with aiohttp.ClientSession() as session:
         url_as = f"{AUTOSYSTEM_URL}/autolike/add?key={AUTOSYSTEM_KEY}&uid={uid}&region=CIS"
+        headers = {"X-Api-Key": AUTOSYSTEM_KEY}
 
         try:
             timeout_cfg = aiohttp.ClientTimeout(total=30)
-            async with session.get(url_as, timeout=timeout_cfg) as resp_as:
-                raw_bytes = await resp_as.read()
-                raw_as = raw_bytes.decode('utf-8', errors='ignore')
-            data_as = json.loads(raw_as)
+            async with session.get(url_as, headers=headers, timeout=timeout_cfg) as resp:
+                raw_bytes = await resp.read()
+                raw_text = raw_bytes.decode('utf-8', errors='ignore')
+                
+                if resp.status == 200:
+                    parsed = json.loads(raw_text)
+                    if isinstance(parsed, dict):
+                        if parsed.get("sucesso") is True or "sucesso" not in parsed:
+                            result_data["success"] = True
+                            
+                            # Гирифтани ном
+                            nick = find_info_recursive(parsed, ("nickname", "nick", "nome", "playernickname", "name", "player_name"))
+                            if nick:
+                                result_data["nickname"] = nick
+                                
+                            # Гирифтани level
+                            lvl = find_info_recursive(parsed, ("level", "playerlevel", "accountlevel", "player_level", "nivel"))
+                            if lvl:
+                                result_data["level"] = lvl
+                                
+                            # Гирифтани лайкҳо
+                            lb = find_info_recursive(parsed, ("likes_antes", "likes_before", "likes", "curtidas"))
+                            if lb and lb.isdigit():
+                                result_data["likes_before"] = lb
+                                la = int(lb) + 198
+                                result_data["likes_after"] = str(la)
+                            else:
+                                result_data["likes_before"] = "14074"
+                                result_data["likes_after"] = "14272"
+                        else:
+                            msg_err = parsed.get("mensagem") or parsed.get("erro") or parsed.get("message") or "Хатогӣ дар илова кардани ID."
+                            result_data["error"] = str(msg_err)
+                else:
+                    result_data["error"] = f"Хатогии сервер (Status: {resp.status})"
+        except Exception as e:
+            result_data["error"] = f"Xato: {e}"
 
-            if isinstance(data_as, dict) and (data_as.get("sucesso") is True or "sucesso" not in data_as):
-                success = True
-            else:
-                msg_err = data_as.get("mensagem") or data_as.get("erro") or data_as.get("message") or "Хатогӣ дар илова кардани ID."
-                last_error = str(msg_err)
-        except asyncio.TimeoutError:
-            success = True
-        except Exception as e_as:
-            last_error = f"Xato: {e_as}"
-
-    return {
-        "success": success,
-        "uid": uid,
-        "error": last_error
-    }
+    return result_data
 
 async def check_group_access(update: Update, context: ContextTypes.DEFAULT_TYPE, is_vip: bool = False) -> bool:
     chat = update.effective_chat
@@ -273,13 +276,9 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_cache["user_history"] = user_history
             await save_state()
 
-        progress = await update.message.reply_text(f"Илова кардани UID {uid} ба авто-лайки рӯзона...")
+        progress = await update.message.reply_text(f"Илова кардани UID {uid} ба сервери AutoLikeSystem...")
 
-        add_task = asyncio.create_task(add_autolike_id(uid))
-        info_task = asyncio.create_task(fetch_player_info(uid))
-
-        res = await add_task
-        p_info = await info_task
+        res = await add_and_fetch_autolike(uid)
 
         if not res["success"]:
             if not admin_flag and not vip_flag:
@@ -296,26 +295,20 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await progress.edit_text(f"Xato: {err_reason}")
             return
 
-        nickname = p_info["nickname"]
-        likes_before_str = p_info["likes"]
-        
-        try:
-            lb_int = int(likes_before_str)
-            added_int = 198
-            la_int = lb_int + added_int
-        except Exception:
-            lb_int = 14074
-            added_int = 198
-            la_int = 14272
+        nickname = res["nickname"]
+        level = res["level"]
+        lb = res["likes_before"]
+        added = res["likes_added"]
+        la = res["likes_after"]
 
         caption = (
             f"🔥 <b>Parnetka Likes</b>\n\n"
             f"👤 <b>Ном:</b> {nickname}\n"
-            f"🌐 <b>Level:</b> {p_info['level']}\n"
+            f"🌐 <b>Level:</b> {level}\n"
             f"🆔 <b>UID:</b> {uid}\n\n"
-            f"💔 <b>Пеш аз лайк:</b> {lb_int}\n"
-            f"💖 <b>Илова шуд:</b> +{added_int}\n"
-            f"❤️ <b>Баъд аз лайк:</b> {la_int}\n\n"
+            f"💔 <b>Пеш аз лайк:</b> {lb}\n"
+            f"💖 <b>Илова шуд:</b> +{added}\n"
+            f"❤️ <b>Баъд аз лайк:</b> {la}\n\n"
             f"⏳ <i>Лайки навбатӣ ба ин UID пас аз 24 соат!</i>\n\n"
             f"💎 <b>МЕХОҲЕД 200+ VIP LIKE ХАРЕД?</b>\n"
             f"⚡ <i>Бе интизории 24 соат ва бо суръати баланд!</i>\n"
@@ -356,10 +349,10 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await load_state()
     removed = False
     if target in db_cache.get("uids", {}):
-        db_cache["uids"].pop(target)
+        db_cache.get("uids").pop(target)
         removed = True
     if target in db_cache.get("user_history", {}):
-        db_cache["user_history"].pop(target)
+        db_cache.get("user_history").pop(target)
         removed = True
     if removed:
         await save_state()
