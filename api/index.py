@@ -15,16 +15,17 @@ logging.basicConfig(
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9160352065:AAEEZDlCJ5qNW1XjheHJlzhXayiAokA_FU8")
-LIKES_API_KEY = os.getenv("API_KEY", "Parnetka_43455514")
-BASE_API_URL = "https://fflikes.ucbot.net"
+LIKES_API_KEY = os.getenv("API_KEY", "AUTOSYSTEM_a00dc13872dfc8c417f658cd9d29ffd6d1d0")
+BASE_API_URL = "https://autolikesystem.com.br"
+DEFAULT_REGION = os.getenv("FF_REGION", "RU")
 FIREBASE_DB_URL = "https://api-key-mgmt-default-rtdb.firebaseio.com/ff_bot_state.json"
 
 ADMIN_IDS = [6410886684]
 ALLOWED_GROUPS = [-1004356261091]
 
 COOLDOWN_TIME = 86400  # 24 соат
-DEFAULT_LIKES_AMOUNT = 100  # Барои корбарони оддӣ 100 лайк
-ADMIN_DEFAULT_LIKES = 200   # Барои Админ ба таври автоматӣ 200 лайк
+DEFAULT_LIKES_AMOUNT = 100  # Барои корбарони оддӣ 100 лайк (дар 1 дархост)
+ADMIN_DEFAULT_LIKES = 220   # Барои Админ 220 лайк (стандарти API дар 1 дархост)
 MAX_UIDS_PER_USER = 1  # Ҳар як аккаунти Telegram дар 24 соат танҳо ба 1 UID лайк зада метавонад
 
 db_cache = {
@@ -139,7 +140,7 @@ def is_admin_user(user) -> bool:
 def find_level_recursive(obj) -> str:
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in ("level", "playerlevel", "accountlevel", "player_level") and v is not None:
+            if k.lower() in ("nivel", "level", "playerlevel", "accountlevel", "player_level") and v is not None:
                 val_str = str(v).strip()
                 if val_str.isdigit():
                     return val_str
@@ -156,10 +157,10 @@ def find_level_recursive(obj) -> str:
 
 
 async def fetch_player_level(uid: str) -> str:
-    info_url = f"{BASE_API_URL}/info?api_key={LIKES_API_KEY}&uid={uid}"
+    info_url = f"{BASE_API_URL}/v1/info?key={LIKES_API_KEY}&uid={uid}&region={DEFAULT_REGION}"
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(info_url, timeout=4) as resp:
+            async with session.get(info_url, timeout=8) as resp:
                 if resp.status == 200:
                     text = await resp.text()
                     parsed = json.loads(text)
@@ -335,60 +336,51 @@ async def handle_private_messages(update: Update, context: ContextTypes.DEFAULT_
 
 async def send_likes_batch(uid: str, target_amount: int) -> dict:
     total_added = 0
-    first_before = None
-    last_after = None
+    first_before = "N/A"
+    last_after = "N/A"
     nickname = "N/A"
     resp_uid = uid
     last_error = ""
     raw_first = {}
 
-    max_calls = max(1, (target_amount + 99) // 100)
-    url = f"{BASE_API_URL}/like?api_key={LIKES_API_KEY}&uid={uid}"
+    url = f"{BASE_API_URL}/v1/like?key={LIKES_API_KEY}&uid={uid}&region={DEFAULT_REGION}&qtd={target_amount}"
 
     async with aiohttp.ClientSession() as session:
-        for _ in range(max_calls):
-            if total_added >= target_amount:
-                break
+        try:
+            async with session.get(url, timeout=90) as resp:
+                raw = await resp.text()
+            data = json.loads(raw)
+            raw_first = data if isinstance(data, dict) else {}
 
-            try:
-                async with session.get(url, timeout=15) as resp:
-                    raw = await resp.text()
-                data = json.loads(raw)
+            if not isinstance(data, dict):
+                last_error = raw[:150]
+            elif data.get("sucesso") is not True:
+                last_error = str(data.get("erro", "Хатогӣ дар фиристодани лайк"))
+            elif data.get("status") == "aguardando" or data.get("codigo") == "ID_COOLDOWN":
+                rem_txt = data.get("tempo_restante", "24 соат")
+                last_error = f"Ин аккаунт аллакай лайк гирифтааст ({rem_txt})"
+            else:
+                nickname = str(data.get("nick") or "N/A")
+                resp_uid = str(data.get("uid") or uid)
+                first_before = data.get("likes_antes", "N/A")
+                last_after = data.get("likes_depois", "N/A")
 
-                if not isinstance(data, dict) or data.get("success") is not True:
-                    last_error = str(data.get("error", "")) if isinstance(data, dict) else raw[:150]
-                    break
+                sent = int(data.get("likes_enviados", 0) or 0)
+                confirmed = int(data.get("likes_confirmados", 0) or 0)
+                total_added = sent if sent > 0 else confirmed
 
-                if not raw_first:
-                    raw_first = data
+                if total_added <= 0:
+                    last_error = str(data.get("erro") or "Лимити рӯзонаи аккаунти бозӣ пур шудааст")
 
-                details = data.get("data", {})
-                nickname = details.get("PlayerNickname", nickname)
-                resp_uid = str(details.get("UID", resp_uid))
-
-                if first_before is None:
-                    first_before = details.get("LikesbeforeCommand", "N/A")
-
-                added = int(details.get("LikesGivenByAPI", 0) or 0)
-                if added <= 0:
-                    if total_added == 0:
-                        last_error = "Лимити рӯзонаи аккаунти бозӣ пур шудааст"
-                    break
-
-                total_added += added
-                last_after = details.get("LikesafterCommand", last_after)
-
-                if total_added >= target_amount:
-                    break
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                last_error = str(e)
-                break
+        except asyncio.TimeoutError:
+            last_error = "Вақти интизории сервер ба охир расид (Timeout)"
+        except Exception as e:
+            last_error = str(e)
 
     return {
         "total_added": total_added,
-        "first_before": first_before if first_before is not None else "N/A",
-        "last_after": last_after if last_after is not None else "N/A",
+        "first_before": first_before,
+        "last_after": last_after,
         "nickname": nickname,
         "uid": resp_uid,
         "error": last_error,
@@ -403,10 +395,10 @@ async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag:
         ("⠙", "Санҷиши профили UID...", "▰▰▰▱▱▱▱▱", "32%"),
         ("⠹", f"Омодасозии +{amount} лайк...", "▰▰▰▰▰▱▱▱", "58%"),
         ("⠸", "Фиристодани лайкҳо...", "▰▰▰▰▰▰▰▱", "84%"),
-        ("🏆", "Анҷом ёфт! Натиҷа...", "▰▰▰▰▰▰▰▰", "100%"),
+        ("🏆", "Интизори тасдиқи сервер...", "▰▰▰▰▰▰▰▰", "98%"),
     ]
     for spinner, status, bar, pct in frames:
-        await asyncio.sleep(0.55)
+        await asyncio.sleep(1.2)
         frame_text = (
             f"{badge} • <code>{uid}</code>\n"
             f"<blockquote>{spinner} <b>{status}</b>\n"
@@ -485,7 +477,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши қатъии лимити UID-и бозӣ
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -508,7 +499,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # 2. Санҷиши қатъии лимити аккаунти Telegram
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
@@ -596,11 +586,12 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unlock_ts = time.time() + COOLDOWN_TIME
             rem_hms = format_hms(COOLDOWN_TIME)
             unlock_str = format_unlock_clock(unlock_ts)
+            err_reason = escape_html(res["error"] or "Ин аккаунт аллакай дар сервер лайк гирифтааст.")
             err_text = (
-                "⏳ <b>ЛИМИТИ РӮЗОНАИ ИН UID ПУР АСТ!</b>\n"
+                "⏳ <b>ЛАЙК ФИРИСТОДА НАШУД!</b>\n"
                 "━━━━━━━━━━━\n"
                 f"🆔 <b>UID:</b> <code>{uid}</code>\n"
-                f"🚫 <i>Ин аккаунт аллакай дар сервер лайк гирифтааст.</i>\n\n"
+                f"🚫 <i>Сабаб: {err_reason}</i>\n\n"
                 f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
                 f"🔓 <b>Вақти кушодашавӣ:</b> <code>{unlock_str}</code>"
                 f"{VIP_PROMO_FOOTER}"
@@ -618,7 +609,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         likes_sent_successfully = True
         completed_now = time.time()
 
-        # Сабти вақти дақиқи анҷоми лайк дар база
         if not vip_flag:
             memory_uids[uid] = {
                 "time": completed_now,
@@ -738,9 +728,22 @@ async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin_user(update.effective_user):
         return
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{BASE_API_URL}/status?api_key={LIKES_API_KEY}", timeout=10) as resp:
+        async with session.get(f"{BASE_API_URL}/v1/info/lista?key={LIKES_API_KEY}", timeout=15) as resp:
             raw = await resp.text()
-    await update.message.reply_text(f"📊 **БАЛАНС:**\n`{raw}`", parse_mode="Markdown")
+    try:
+        data = json.loads(raw)
+        if data.get("sucesso"):
+            msg = (
+                f"📊 **СТАТИСТИКАИ ИМРӮЗАИ API:**\n"
+                f"📅 Сана: `{data.get('dia')}`\n"
+                f"🆔 ID-ҳои имрӯз лайкгирифта: `{data.get('receberam_no_dia', 0)} / 50`\n"
+                f"❤️ Ҳамагӣ лайкҳои имрӯза: `{data.get('total_likes_dia', 0)}`"
+            )
+            await update.message.reply_text(msg, parse_mode="Markdown")
+            return
+    except Exception:
+        pass
+    await update.message.reply_text(f"📊 **БАЛАНС:**\n`{raw[:500]}`", parse_mode="Markdown")
 
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
