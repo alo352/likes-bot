@@ -114,7 +114,7 @@ def format_hms(seconds_left: float) -> str:
     hours = total_sec // 3600
     minutes = (total_sec % 3600) // 60
     seconds = total_sec % 60
-    return f"{hours:02d}ҷ : {minutes:02d}м : {seconds:02d}сон"
+    return f"{hours:02d}ч : {minutes:02d}м : {seconds:02d}с"
 
 
 def format_unlock_clock(unlock_timestamp: float) -> str:
@@ -156,7 +156,7 @@ def find_level_recursive(obj) -> str:
 
 
 async def fetch_player_level(uid: str) -> str:
-    info_url = f"{BASE_API_URL}/info?api_key={LIKES_API_KEY}&uid={uid}"
+    info_url = f"{BASE_API_URL}/check-id?api_key={LIKES_API_KEY}&uid={uid}"
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(info_url, timeout=4) as resp:
@@ -397,7 +397,7 @@ async def send_likes_batch(uid: str, target_amount: int) -> dict:
 
 
 async def run_kinematic_animation(progress_msg, uid: str, amount: int, vip_flag: bool = False, has_gif: bool = False):
-    badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡ <b>PARNETKA ENGINE</b>"
+    badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡️ <b>PARNETKA ENGINE</b>"
     frames = [
         ("⠋", "Пайвастшавӣ ба сервер...", "▰▱▱▱▱▱▱▱", "14%"),
         ("⠙", "Санҷиши профили UID...", "▰▰▰▱▱▱▱▱", "32%"),
@@ -452,7 +452,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if not amount_str.isdigit() or not uid.isdigit() or not (8 <= len(uid) <= 12):
+    if not amount_str.isdigit() or not uid.isdigit() or not (7 <= len(uid) <= 15):
         await update.message.reply_text(
             "❌ **ФОРМАТИ ХАТО!**\n"
             "📌 `/like 18778177236`",
@@ -485,7 +485,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши қатъии лимити UID-и бозӣ
+        # 1. Санҷиши лимити 24-соатаи UID-и бозӣ (аз ҳар аккаунти Telegram)
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -501,14 +501,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
                     f"🔓 <b>Вақти дубора лайк гирифтан:</b>\n"
                     f"👉 <code>{unlock_str}</code>\n\n"
-                    "🚫 <i>То ба охир расидани ин вақт ба ин UID лайк зада намешавад!</i>"
+                    "🚫 <i>Ба ин UID дар 24 соат аз ягон аккаунт лайк зада намешавад!</i>"
                     f"{VIP_PROMO_FOOTER}",
                     parse_mode="HTML",
                     reply_markup=DEVELOPER_KEYBOARD
                 )
                 return
 
-        # 2. Санҷиши қатъии лимити аккаунти Telegram
+        # 2. Санҷиши лимити 24-соатаи аккаунти Telegram
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
@@ -546,19 +546,18 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lock_start_time = time.time()
 
     try:
-        if not vip_flag:
+        if not admin_flag and not vip_flag:
             memory_uids[uid] = {
                 "time": lock_start_time,
                 "user_id": tg_user_id,
                 "name": tg_full_name
             }
             db_cache["uids"] = memory_uids
-            if not admin_flag:
-                user_history[tg_user_id].append({"uid": uid, "time": lock_start_time})
-                db_cache["user_history"] = user_history
+            user_history[tg_user_id].append({"uid": uid, "time": lock_start_time})
+            db_cache["user_history"] = user_history
             await save_state()
 
-        badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡ <b>PARNETKA ENGINE</b>"
+        badge = "👑 <b>PARNETKA VIP</b>" if vip_flag else "⚡️ <b>PARNETKA ENGINE</b>"
         start_text = (
             f"{badge} • <code>{uid}</code>\n"
             f"<blockquote>🔄 <b>Оғози санҷиш...</b>\n"
@@ -582,15 +581,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         res = await api_task
 
         if res["total_added"] <= 0:
-            if not vip_flag:
+            if not admin_flag and not vip_flag:
                 memory_uids.pop(uid, None)
                 db_cache["uids"] = memory_uids
-                if not admin_flag:
-                    user_history[tg_user_id] = [
-                        item for item in user_history.get(tg_user_id, [])
-                        if item["uid"] != uid
-                    ]
-                    db_cache["user_history"] = user_history
+                user_history[tg_user_id] = [
+                    item for item in user_history.get(tg_user_id, [])
+                    if item["uid"] != uid
+                ]
+                db_cache["user_history"] = user_history
                 await save_state()
 
             unlock_ts = time.time() + COOLDOWN_TIME
@@ -618,19 +616,17 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         likes_sent_successfully = True
         completed_now = time.time()
 
-        # Сабти вақти дақиқи анҷоми лайк дар база
-        if not vip_flag:
+        if not admin_flag and not vip_flag:
             memory_uids[uid] = {
                 "time": completed_now,
                 "user_id": tg_user_id,
                 "name": tg_full_name
             }
             db_cache["uids"] = memory_uids
-            if not admin_flag:
-                for item in user_history.get(tg_user_id, []):
-                    if item["uid"] == uid:
-                        item["time"] = completed_now
-                db_cache["user_history"] = user_history
+            for item in user_history.get(tg_user_id, []):
+                if item["uid"] == uid:
+                    item["time"] = completed_now
+            db_cache["user_history"] = user_history
             await save_state()
 
         player_level = find_level_recursive(res["raw_first"]) or await fetch_player_level(uid)
@@ -640,38 +636,56 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nickname = escape_html(res["nickname"])
         final_uid = escape_html(res["uid"] or uid)
 
-        level_line = f"🏅 <b>Сатҳи бозингар:</b> <code>LVL {escape_html(player_level)}</code>\n" if player_level and player_level != "N/A" else ""
+        level_line = (
+            f"🏅 <b>Уровень:</b> <code>LVL {escape_html(player_level)}</code>\n"
+            if player_level and player_level != "N/A"
+            else ""
+        )
 
-        vip_rem_str = ""
         if vip_flag:
             vip_exp_time = float(db_cache["vips"][uid])
             vip_rem_str = format_remaining(vip_exp_time - completed_now)
             banner_top = "👑 <b>PARNETKA VIP • BOOST COMPLETE</b> 👑"
-            status_line = f"💎 <b>VIP АКТИВ:</b> Боқимонда <code>{vip_rem_str}</code>"
+            status_block = (
+                f"<blockquote>"
+                f"💎 <b>VIP-СТАТУС:</b> <code>АКТИВЕН</code>\n"
+                f"⏳ <b>Осталось:</b> <code>{escape_html(vip_rem_str)}</code>"
+                f"</blockquote>"
+            )
+        elif admin_flag:
+            vip_rem_str = ""
+            banner_top = "⚡️ <b>PARNETKA LIKES • BOOSTED</b> ⚡️"
+            status_block = (
+                f"<blockquote>"
+                f"👑 <b>РЕЖИМ АДМИНА:</b> <code>БЕЗ ЛИМИТА 24Ч</code>"
+                f"</blockquote>"
+            )
         else:
+            vip_rem_str = ""
             unlock_ts = completed_now + COOLDOWN_TIME
             rem_hms = format_hms(unlock_ts - time.time())
             unlock_str = format_unlock_clock(unlock_ts)
-            banner_top = "⚡ <b>PARNETKA LIKES • BOOSTED</b> ⚡"
-            status_line = (
-                f"⏳ <b>Боқимонда:</b> <code>{rem_hms}</code>\n"
-                f"🔓 <b>Лайки навбатӣ:</b> <code>{unlock_str}</code>"
+            banner_top = "⚡️ <b>PARNETKA LIKES • BOOSTED</b> ⚡️"
+            status_block = (
+                f"<blockquote>"
+                f"⏳ <b>Осталось:</b> <code>{rem_hms}</code>\n"
+                f"🔓 <b>Следующий лайк:</b> <code>{unlock_str}</code>"
+                f"</blockquote>"
             )
 
         caption_html = (
             f"{banner_top}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"<blockquote>"
-            f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
+            f"🎮 <b>Игрок:</b> <code>{nickname}</code>\n"
             f"{level_line}"
             f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
-            f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
-            f"📊 <b>НАТИҶАИ АФЗОИШИ ЛАЙКҲО:</b>\n"
-            f"💔 <b>Пеш буд:</b> <code>{before_likes}</code>\n"
-            f"❤️‍🔥 <b>Илова шуд:</b> <b><code>+{likes_given} LIKE</code></b> 🚀\n"
-            f"🏆 <b>Ҳозира шуд:</b> <b><code>{after_likes}</code></b> 🔥"
+            f"──────────────────────\n"
+            f"💔 <b>Было лайков:</b> <code>{before_likes}</code>\n"
+            f"❤️‍🔥 <b>Добавлено:</b> <b><code>+{likes_given} LIKE</code></b> 🚀\n"
+            f"🏆 <b>Стало лайков:</b> <b><code>{after_likes}</code></b> 🔥"
             f"</blockquote>\n"
-            f"{status_line}"
+            f"{status_block}"
         )
 
         if vip_flag:
@@ -688,7 +702,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
                     f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
                     f"❤️‍🔥 <b>Илова шуд:</b> <code>+{likes_given} лайк</code>\n"
-                    f"⏳ <b>VIP Боқимонда:</b> <code>{vip_rem_str}</code>"
+                    f"⏳ <b>VIP Боқимонда:</b> <code>{escape_html(vip_rem_str)}</code>"
                 )
                 for admin_id in ADMIN_IDS:
                     await context.bot.send_message(
@@ -711,15 +725,14 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     except Exception as e:
-        if not likes_sent_successfully and not vip_flag:
+        if not likes_sent_successfully and not admin_flag and not vip_flag:
             memory_uids.pop(uid, None)
             db_cache["uids"] = memory_uids
-            if not admin_flag:
-                user_history[tg_user_id] = [
-                    item for item in user_history.get(tg_user_id, [])
-                    if item["uid"] != uid
-                ]
-                db_cache["user_history"] = user_history
+            user_history[tg_user_id] = [
+                item for item in user_history.get(tg_user_id, [])
+                if item["uid"] != uid
+            ]
+            db_cache["user_history"] = user_history
             await save_state()
         logging.error(f"/like error: {e}")
         try:
@@ -732,6 +745,80 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         active_requests.discard(lock_key_user)
         active_requests.discard(lock_key_uid)
+
+
+async def checkid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_group_access(update, context):
+        return
+
+    if not context.args or not context.args[0].strip().isdigit() or not (7 <= len(context.args[0].strip()) <= 15):
+        await update.message.reply_text(
+            "📌 <b>ТАРЗИ САНҶИШИ UID:</b>\n"
+            "👉 <code>/checkid 18778177236</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    uid = context.args[0].strip()
+    wait_msg = await update.message.reply_text(f"🔍 <i>Санҷиши профили UID <code>{uid}</code>...</i>", parse_mode="HTML")
+
+    url = f"{BASE_API_URL}/check-id?api_key={LIKES_API_KEY}&uid={uid}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                raw = await resp.text()
+                status_code = resp.status
+
+        data = json.loads(raw) if raw else {}
+        if status_code != 200 or not isinstance(data, dict) or data.get("success") is False:
+            err_msg = escape_html(data.get("error") or data.get("message") or f"HTTP {status_code}")
+            await wait_msg.edit_text(
+                f"❌ <b>САНҶИШИ UID НОМУВАФФАҚ ШУД!</b>\n"
+                f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+                f"⚠️ <b>Сабаб:</b> <code>{err_msg}</code>",
+                parse_mode="HTML"
+            )
+            return
+
+        details = data.get("data") if isinstance(data.get("data"), dict) else data
+        nickname = escape_html(
+            details.get("PlayerNickname")
+            or details.get("nickname")
+            or details.get("name")
+            or "N/A"
+        )
+        likes_now = escape_html(
+            details.get("Likes")
+            or details.get("likes")
+            or details.get("currentLikes")
+            or details.get("LikesbeforeCommand")
+            or "N/A"
+        )
+        level = find_level_recursive(data) or "N/A"
+        region = escape_html(details.get("region") or details.get("server") or "BD")
+
+        eligible_raw = details.get("eligible200") if "eligible200" in details else details.get("canLike200")
+        if eligible_raw is True:
+            eligible_str = "✅ Озод (то 200 лайк)"
+        elif eligible_raw is False:
+            eligible_str = "⏳ Лимити 200 лайк пур аст"
+        else:
+            eligible_str = "ℹ️ Маълум нест"
+
+        await wait_msg.edit_text(
+            f"🔎 <b>НАТИҶАИ САНҶИШИ ПРОФИЛ</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
+            f"🆔 <b>UID:</b> <code>{uid}</code>\n"
+            f"🌍 <b>Сервер:</b> <code>{region}</code>\n"
+            f"🏅 <b>Сатҳ:</b> <code>{escape_html(level)}</code>\n"
+            f"❤️ <b>Лайкҳои ҳозира:</b> <code>{likes_now}</code>\n"
+            f"📊 <b>Ҳолати 24-соата:</b> <b>{eligible_str}</b>",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"/checkid error: {e}")
+        await wait_msg.edit_text("❌ <b>Хатогӣ ҳангоми пайвастшавӣ ба сервер!</b>", parse_mode="HTML")
 
 
 async def remain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -915,6 +1002,7 @@ async def ensure_bot_ready():
         await load_state()
         ptb_application = ApplicationBuilder().token(BOT_TOKEN).build()
         ptb_application.add_handler(CommandHandler("like", like_command))
+        ptb_application.add_handler(CommandHandler(["checkid", "check_id"], checkid_command))
         ptb_application.add_handler(CommandHandler("remain", remain_command))
         ptb_application.add_handler(CommandHandler("reset", reset_command))
         ptb_application.add_handler(CommandHandler("check", check_command))
