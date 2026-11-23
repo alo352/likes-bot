@@ -1,3 +1,4 @@
+import io
 import os
 import time
 import json
@@ -7,6 +8,7 @@ import logging
 import aiohttp
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Request, HTTPException
+from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -252,6 +254,116 @@ async def fetch_player_level(uid: str) -> str:
         except Exception:
             pass
     return "N/A"
+
+
+def _load_font(size: int, bold: bool = False):
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+
+def _sanitize_for_card(text: str, fallback: str = "") -> str:
+    cleaned = "".join(ch for ch in str(text or "") if ord(ch) < 0x10000 and ch not in ("\r", "\n", "\t")).strip()
+    return cleaned if cleaned else fallback
+
+
+def build_like_result_card(
+    nickname: str,
+    uid: str,
+    level: str,
+    before_likes: str,
+    added_likes: int,
+    after_likes: str,
+    is_vip: bool = False,
+    is_admin: bool = False,
+) -> io.BytesIO:
+    width, height = 920, 520
+    img = Image.new("RGB", (width, height), (12, 14, 24))
+    draw = ImageDraw.Draw(img)
+
+    # Градиенти замина ва ороиши торик ба услуби корти бозӣ
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        r = int(13 + ratio * 14)
+        g = int(16 + ratio * 16)
+        b = int(28 + ratio * 28)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    accent = (245, 158, 11) if is_vip else ((168, 85, 247) if is_admin else (56, 189, 248))
+    accent_soft = (55, 38, 15) if is_vip else ((42, 24, 66) if is_admin else (18, 46, 68))
+
+    # Чорчӯбаи асосии корт
+    draw.rounded_rectangle([24, 24, width - 24, height - 24], radius=28, fill=(20, 24, 38), outline=accent, width=3)
+
+    # Баннери болоӣ (номи аккаунт, сатҳ ва UID)
+    draw.rounded_rectangle([46, 46, width - 46, 195], radius=22, fill=accent_soft, outline=accent, width=2)
+
+    # Аватари рамзӣ дар чапи баннери болоӣ
+    avatar_box = [68, 68, 172, 172]
+    draw.rounded_rectangle(avatar_box, radius=20, fill=(30, 36, 56), outline=accent, width=2)
+    font_badge = _load_font(20, bold=True)
+    font_name = _load_font(38, bold=True)
+    font_sub = _load_font(22, bold=False)
+    font_label = _load_font(22, bold=True)
+    font_val = _load_font(34, bold=True)
+
+    tag_text = "VIP" if is_vip else ("ADM" if is_admin else "FF")
+    draw.text((92, 106), tag_text, font=font_badge, fill=accent)
+
+    safe_nick = _sanitize_for_card(nickname, "Player")
+    if len(safe_nick) > 22:
+        safe_nick = safe_nick[:21] + "..."
+    safe_uid = _sanitize_for_card(uid, "0")
+    safe_lvl = _sanitize_for_card(level, "")
+
+    draw.text((196, 68), safe_nick, font=font_name, fill=(255, 255, 255))
+
+    sub_parts = [f"UID: {safe_uid}"]
+    if safe_lvl and safe_lvl.upper() != "N/A":
+        lvl_display = safe_lvl if safe_lvl.upper().startswith("LVL") else f"LVL {safe_lvl}"
+        sub_parts.append(lvl_display)
+    draw.text((196, 126), "   •   ".join(sub_parts), font=font_sub, fill=(203, 213, 225))
+
+    # Сарлавҳаи бахши лайкҳо дар таги номи аккаунт
+    draw.text((52, 222), "СТАТИСТИКА ЛАЙКОВ", font=font_label, fill=accent)
+
+    # Се корти поёнӣ: Было / Добавлено / Стало
+    cards = [
+        ("БЫЛО", _sanitize_for_card(before_likes, "0"), (30, 36, 54), (148, 163, 184), (241, 245, 249)),
+        ("ДОБАВЛЕНО", f"+{int(added_likes)}", (20, 56, 44), (52, 211, 153), (110, 231, 183)),
+        ("СТАЛО", _sanitize_for_card(after_likes, "0"), (58, 34, 24), (251, 146, 60), (253, 186, 116)),
+    ]
+
+    card_w = 256
+    card_h = 175
+    gap = 20
+    start_x = 46
+    card_y = 265
+
+    for idx, (title, value, bg_col, border_col, val_col) in enumerate(cards):
+        x0 = start_x + idx * (card_w + gap)
+        x1 = x0 + card_w
+        y1 = card_y + card_h
+        draw.rounded_rectangle([x0, card_y, x1, y1], radius=20, fill=bg_col, outline=border_col, width=2)
+        draw.text((x0 + 20, card_y + 22), title, font=font_label, fill=border_col)
+        draw.text((x0 + 20, card_y + 88), value, font=font_val, fill=val_col)
+
+    draw.text((52, 464), "PARNETKA AUTO LIKE • RU / CIS", font=font_sub, fill=(148, 163, 184))
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 
 async def track_bot_removal(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -541,7 +653,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user_id = str(user.id)
     now = time.time()
 
-    # Муҳофизати зидди спами зуд-зуд барои корбарони ғайри-админ
     if not admin_flag:
         last_try = user_last_attempt.get(tg_user_id, 0.0)
         if (now - last_try) < USER_SPAM_DELAY:
@@ -600,7 +711,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history = db_cache.get("user_history", {})
 
     if not admin_flag and not vip_flag:
-        # 1. Санҷиши лимити 24-соатаи UID-и бозӣ (аз ҳар аккаунти Telegram)
         if uid in memory_uids:
             uid_entry = memory_uids[uid]
             uid_time = float(uid_entry["time"]) if isinstance(uid_entry, dict) else float(uid_entry)
@@ -623,7 +733,6 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # 2. Санҷиши лимити 24-соатаи аккаунти Telegram
         if tg_user_id not in user_history:
             user_history[tg_user_id] = []
 
@@ -659,6 +768,7 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     like_gif_id = db_cache.get("like_gif_id", "")
     has_gif = bool(like_gif_id)
     lock_start_time = time.time()
+    progress = None
 
     try:
         if not admin_flag and not vip_flag:
@@ -749,10 +859,10 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await save_state()
 
         player_level = find_level_recursive(res["raw_first"]) or await fetch_player_level(uid)
-        before_likes = escape_html(res["first_before"])
-        after_likes = escape_html(res["last_after"])
-        nickname = escape_html(res["nickname"])
-        final_uid = escape_html(res["uid"] or uid)
+        before_likes = str(res["first_before"])
+        after_likes = str(res["last_after"])
+        raw_nickname = str(res["nickname"])
+        final_uid = str(res["uid"] or uid)
 
         level_line = (
             f"🏅 <b>Уровень:</b> <code>LVL {escape_html(player_level)}</code>\n"
@@ -763,47 +873,29 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if vip_flag:
             vip_exp_time = float(db_cache["vips"][uid])
             vip_rem_str = format_remaining(vip_exp_time - completed_now)
-            banner_top = "👑 <b>PARNETKA VIP • BOOST COMPLETE</b> 👑"
-            status_block = (
-                f"<blockquote>"
-                f"💎 <b>VIP-СТАТУС:</b> <code>АКТИВЕН</code>\n"
-                f"⏳ <b>Осталось:</b> <code>{escape_html(vip_rem_str)}</code>"
-                f"</blockquote>"
-            )
+            status_line = f"💎 <b>VIP-СТАТУС:</b> Осталось <code>{escape_html(vip_rem_str)}</code>"
         elif admin_flag:
             vip_rem_str = ""
-            banner_top = "⚡️ <b>PARNETKA LIKES • BOOSTED</b> ⚡️"
-            status_block = (
-                f"<blockquote>"
-                f"👑 <b>РЕЖИМ АДМИНА:</b> <code>БЕЗ ЛИМИТА 24Ч</code>"
-                f"</blockquote>"
-            )
+            status_line = "👑 <b>РЕЖИМ АДМИНА:</b> Без ограничения 24 часа"
         else:
             vip_rem_str = ""
             unlock_ts = completed_now + COOLDOWN_TIME
             rem_hms = format_hms(unlock_ts - time.time())
             unlock_str = format_unlock_clock(unlock_ts)
-            banner_top = "⚡️ <b>PARNETKA LIKES • BOOSTED</b> ⚡️"
-            status_block = (
-                f"<blockquote>"
+            status_line = (
                 f"⏳ <b>Осталось:</b> <code>{rem_hms}</code>\n"
                 f"🔓 <b>Следующий лайк:</b> <code>{unlock_str}</code>"
-                f"</blockquote>"
             )
 
         caption_html = (
-            f"{banner_top}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<blockquote>"
-            f"🎮 <b>Игрок:</b> <code>{nickname}</code>\n"
+            f"⚡️ <b>PARNETKA LIKES • BOOSTED</b> ⚡️\n"
+            f"🎮 <b>Игрок:</b> <code>{escape_html(raw_nickname)}</code>\n"
             f"{level_line}"
-            f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
-            f"──────────────────────\n"
-            f"💔 <b>Было лайков:</b> <code>{before_likes}</code>\n"
-            f"❤️‍🔥 <b>Добавлено:</b> <b><code>+{likes_given} LIKE</code></b> 🚀\n"
-            f"🏆 <b>Стало лайков:</b> <b><code>{after_likes}</code></b> 🔥"
-            f"</blockquote>\n"
-            f"{status_block}"
+            f"🆔 <b>UID:</b> <code>{escape_html(final_uid)}</code>\n"
+            f"💔 <b>Было:</b> <code>{escape_html(before_likes)}</code>  |  "
+            f"❤️‍🔥 <b>Добавлено:</b> <b><code>+{likes_given}</code></b>  |  "
+            f"🏆 <b>Стало:</b> <b><code>{escape_html(after_likes)}</code></b>\n"
+            f"{status_line}"
         )
 
         if vip_flag:
@@ -817,8 +909,8 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"━━━━━━━━━━━\n"
                     f"👤 <b>Зананда:</b> {user_mention} (ID: <code>{user.id}</code>)\n"
                     f"📢 <b>Гурӯҳ:</b> <b>{chat_name}</b>\n"
-                    f"🎮 <b>Бозингар:</b> <code>{nickname}</code>\n"
-                    f"🆔 <b>UID:</b> <code>{final_uid}</code>\n"
+                    f"🎮 <b>Бозингар:</b> <code>{escape_html(raw_nickname)}</code>\n"
+                    f"🆔 <b>UID:</b> <code>{escape_html(final_uid)}</code>\n"
                     f"❤️‍🔥 <b>Илова шуд:</b> <code>+{likes_given} лайк</code>\n"
                     f"⏳ <b>VIP Боқимонда:</b> <code>{escape_html(vip_rem_str)}</code>"
                 )
@@ -831,10 +923,28 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as admin_err:
                 logging.error(f"VIP admin notification error: {admin_err}")
 
-        if has_gif:
-            await progress.edit_caption(caption=caption_html, parse_mode="HTML")
-        else:
-            await progress.edit_text(text=caption_html, parse_mode="HTML")
+        card_buf = build_like_result_card(
+            nickname=raw_nickname,
+            uid=final_uid,
+            level=player_level,
+            before_likes=before_likes,
+            added_likes=likes_given,
+            after_likes=after_likes,
+            is_vip=vip_flag,
+            is_admin=admin_flag,
+        )
+
+        try:
+            if progress is not None:
+                await progress.delete()
+        except Exception:
+            pass
+
+        await update.message.reply_photo(
+            photo=card_buf,
+            caption=caption_html,
+            parse_mode="HTML",
+        )
 
     except Exception as e:
         if not likes_sent_successfully and not admin_flag and not vip_flag:
@@ -848,10 +958,12 @@ async def like_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_state()
         logging.error(f"/like error: {e}")
         try:
-            if has_gif:
+            if progress is not None and has_gif:
                 await progress.edit_caption(caption="❌ **Хатогии сервер!**", parse_mode="Markdown")
-            else:
+            elif progress is not None:
                 await progress.edit_text("❌ **Хатогии сервер!**", parse_mode="Markdown")
+            else:
+                await update.message.reply_text("❌ **Хатогии сервер!**", parse_mode="Markdown")
         except Exception:
             pass
     finally:
