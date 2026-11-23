@@ -256,20 +256,28 @@ async def fetch_player_level(uid: str) -> str:
     return "N/A"
 
 
-def _load_font(size: int, bold: bool = False):
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
+def _get_unified_font(size: int):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(base_dir)
+    font_paths = [
+        os.path.join(base_dir, "font.ttf"),
+        os.path.join(base_dir, "DejaVuSans-Bold.ttf"),
+        os.path.join(parent_dir, "font.ttf"),
+        os.path.join(parent_dir, "DejaVuSans-Bold.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     ]
-    for path in candidates:
-        if os.path.exists(path):
+    for path in font_paths:
+        if path and os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size=size)
             except Exception:
                 pass
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def _sanitize_for_card(text: str, fallback: str = "") -> str:
@@ -287,78 +295,45 @@ def build_like_result_card(
     is_vip: bool = False,
     is_admin: bool = False,
 ) -> io.BytesIO:
-    width, height = 920, 520
-    img = Image.new("RGB", (width, height), (12, 14, 24))
+    width, height = 960, 260
+    img = Image.new("RGB", (width, height), (14, 17, 28))
     draw = ImageDraw.Draw(img)
 
-    # Градиенти замина ва ороиши торик ба услуби корти бозӣ
     for y in range(height):
         ratio = y / max(1, height - 1)
-        r = int(13 + ratio * 14)
-        g = int(16 + ratio * 16)
+        r = int(14 + ratio * 14)
+        g = int(17 + ratio * 18)
         b = int(28 + ratio * 28)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
     accent = (245, 158, 11) if is_vip else ((168, 85, 247) if is_admin else (56, 189, 248))
-    accent_soft = (55, 38, 15) if is_vip else ((42, 24, 66) if is_admin else (18, 46, 68))
+    panel_bg = (22, 27, 42)
 
-    # Чорчӯбаи асосии корт
-    draw.rounded_rectangle([24, 24, width - 24, height - 24], radius=28, fill=(20, 24, 38), outline=accent, width=3)
+    draw.rounded_rectangle([18, 18, width - 18, height - 18], radius=24, fill=panel_bg, outline=accent, width=3)
+    draw.rounded_rectangle([40, 40, 210, height - 40], radius=18, fill=(32, 39, 58), outline=accent, width=2)
 
-    # Баннери болоӣ (номи аккаунт, сатҳ ва UID)
-    draw.rounded_rectangle([46, 46, width - 46, 195], radius=22, fill=accent_soft, outline=accent, width=2)
+    font_badge = _get_unified_font(30)
+    font_nick = _get_unified_font(52)
+    font_meta = _get_unified_font(26)
 
-    # Аватари рамзӣ дар чапи баннери болоӣ
-    avatar_box = [68, 68, 172, 172]
-    draw.rounded_rectangle(avatar_box, radius=20, fill=(30, 36, 56), outline=accent, width=2)
-    font_badge = _load_font(20, bold=True)
-    font_name = _load_font(38, bold=True)
-    font_sub = _load_font(22, bold=False)
-    font_label = _load_font(22, bold=True)
-    font_val = _load_font(34, bold=True)
-
-    tag_text = "VIP" if is_vip else ("ADM" if is_admin else "FF")
-    draw.text((92, 106), tag_text, font=font_badge, fill=accent)
+    badge_text = "VIP" if is_vip else ("ADM" if is_admin else "FF")
+    draw.text((92, 110), badge_text, font=font_badge, fill=accent)
 
     safe_nick = _sanitize_for_card(nickname, "Player")
-    if len(safe_nick) > 22:
-        safe_nick = safe_nick[:21] + "..."
+    if len(safe_nick) > 18:
+        safe_nick = safe_nick[:17] + "..."
     safe_uid = _sanitize_for_card(uid, "0")
     safe_lvl = _sanitize_for_card(level, "")
+    safe_after = _sanitize_for_card(after_likes, "0")
 
-    draw.text((196, 68), safe_nick, font=font_name, fill=(255, 255, 255))
+    draw.text((236, 52), safe_nick, font=font_nick, fill=(255, 255, 255))
 
-    sub_parts = [f"UID: {safe_uid}"]
+    meta_items = [f"UID: {safe_uid}", f"LIKES: {safe_after} (+{int(added_likes)})"]
     if safe_lvl and safe_lvl.upper() != "N/A":
-        lvl_display = safe_lvl if safe_lvl.upper().startswith("LVL") else f"LVL {safe_lvl}"
-        sub_parts.append(lvl_display)
-    draw.text((196, 126), "   •   ".join(sub_parts), font=font_sub, fill=(203, 213, 225))
+        lvl_txt = safe_lvl if safe_lvl.upper().startswith("LVL") else f"LVL {safe_lvl}"
+        meta_items.append(lvl_txt)
 
-    # Сарлавҳаи бахши лайкҳо дар таги номи аккаунт
-    draw.text((52, 222), "СТАТИСТИКА ЛАЙКОВ", font=font_label, fill=accent)
-
-    # Се корти поёнӣ: Было / Добавлено / Стало
-    cards = [
-        ("БЫЛО", _sanitize_for_card(before_likes, "0"), (30, 36, 54), (148, 163, 184), (241, 245, 249)),
-        ("ДОБАВЛЕНО", f"+{int(added_likes)}", (20, 56, 44), (52, 211, 153), (110, 231, 183)),
-        ("СТАЛО", _sanitize_for_card(after_likes, "0"), (58, 34, 24), (251, 146, 60), (253, 186, 116)),
-    ]
-
-    card_w = 256
-    card_h = 175
-    gap = 20
-    start_x = 46
-    card_y = 265
-
-    for idx, (title, value, bg_col, border_col, val_col) in enumerate(cards):
-        x0 = start_x + idx * (card_w + gap)
-        x1 = x0 + card_w
-        y1 = card_y + card_h
-        draw.rounded_rectangle([x0, card_y, x1, y1], radius=20, fill=bg_col, outline=border_col, width=2)
-        draw.text((x0 + 20, card_y + 22), title, font=font_label, fill=border_col)
-        draw.text((x0 + 20, card_y + 88), value, font=font_val, fill=val_col)
-
-    draw.text((52, 464), "PARNETKA AUTO LIKE • RU / CIS", font=font_sub, fill=(148, 163, 184))
+    draw.text((236, 154), "   |   ".join(meta_items), font=font_meta, fill=accent)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
