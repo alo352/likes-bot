@@ -256,28 +256,66 @@ async def fetch_player_level(uid: str) -> str:
     return "N/A"
 
 
-def _get_unified_font(size: int):
+def _get_font_candidates():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(base_dir)
-    font_paths = [
+    return [
         os.path.join(base_dir, "font.ttf"),
-        os.path.join(base_dir, "DejaVuSans-Bold.ttf"),
         os.path.join(parent_dir, "font.ttf"),
-        os.path.join(parent_dir, "DejaVuSans-Bold.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     ]
-    for path in font_paths:
-        if path and os.path.exists(path):
+
+
+def _get_loaded_fonts(size: int):
+    loaded = []
+    seen_paths = set()
+    for path in _get_font_candidates():
+        if path and path not in seen_paths and os.path.exists(path):
+            seen_paths.add(path)
             try:
-                return ImageFont.truetype(path, size=size)
+                loaded.append(ImageFont.truetype(path, size=size))
             except Exception:
                 pass
+    if not loaded:
+        try:
+            loaded.append(ImageFont.load_default(size=size))
+        except TypeError:
+            loaded.append(ImageFont.load_default())
+    return loaded
+
+
+def _char_supported(font, ch: str) -> bool:
+    if ch == " ":
+        return True
     try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        return ImageFont.load_default()
+        mask = font.getmask(ch)
+        return bool(mask and mask.getbbox() is not None)
+    except Exception:
+        return False
+
+
+def _draw_mixed_text(draw: ImageDraw.ImageDraw, xy, text: str, size: int, fill):
+    fonts = _get_loaded_fonts(size)
+    x, y = xy
+    for ch in str(text):
+        chosen_font = fonts[-1]
+        for f in fonts:
+            if _char_supported(f, ch):
+                chosen_font = f
+                break
+        draw.text((x, y), ch, font=chosen_font, fill=fill)
+        try:
+            bbox = draw.textbbox((x, y), ch, font=chosen_font)
+            char_w = max(0, bbox[2] - bbox[0])
+            if char_w == 0 and ch == " ":
+                char_w = max(6, size // 3)
+            x += char_w
+        except Exception:
+            x += max(10, int(size * 0.55))
 
 
 def _sanitize_for_card(text: str, fallback: str = "") -> str:
@@ -299,6 +337,7 @@ def build_like_result_card(
     img = Image.new("RGB", (width, height), (14, 17, 28))
     draw = ImageDraw.Draw(img)
 
+    # Градиенти замина ва корти тозаи уфуқӣ бе 3 катаки поён
     for y in range(height):
         ratio = y / max(1, height - 1)
         r = int(14 + ratio * 14)
@@ -312,28 +351,25 @@ def build_like_result_card(
     draw.rounded_rectangle([18, 18, width - 18, height - 18], radius=24, fill=panel_bg, outline=accent, width=3)
     draw.rounded_rectangle([40, 40, 210, height - 40], radius=18, fill=(32, 39, 58), outline=accent, width=2)
 
-    font_badge = _get_unified_font(30)
-    font_nick = _get_unified_font(52)
-    font_meta = _get_unified_font(26)
-
     badge_text = "VIP" if is_vip else ("ADM" if is_admin else "FF")
-    draw.text((92, 110), badge_text, font=font_badge, fill=accent)
+    _draw_mixed_text(draw, (92, 110), badge_text, size=30, fill=accent)
 
     safe_nick = _sanitize_for_card(nickname, "Player")
-    if len(safe_nick) > 18:
-        safe_nick = safe_nick[:17] + "..."
+    if len(safe_nick) > 20:
+        safe_nick = safe_nick[:19] + "..."
     safe_uid = _sanitize_for_card(uid, "0")
     safe_lvl = _sanitize_for_card(level, "")
     safe_after = _sanitize_for_card(after_likes, "0")
 
-    draw.text((236, 52), safe_nick, font=font_nick, fill=(255, 255, 255))
+    # Номи калон бо санҷиши худкори шрифт барои ҳар як ҳарф/рамз
+    _draw_mixed_text(draw, (236, 52), safe_nick, size=48, fill=(255, 255, 255))
 
     meta_items = [f"UID: {safe_uid}", f"LIKES: {safe_after} (+{int(added_likes)})"]
     if safe_lvl and safe_lvl.upper() != "N/A":
         lvl_txt = safe_lvl if safe_lvl.upper().startswith("LVL") else f"LVL {safe_lvl}"
         meta_items.append(lvl_txt)
 
-    draw.text((236, 154), "   |   ".join(meta_items), font=font_meta, fill=accent)
+    _draw_mixed_text(draw, (236, 154), "   |   ".join(meta_items), size=25, fill=accent)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
